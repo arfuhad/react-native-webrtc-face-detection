@@ -10,8 +10,11 @@
 #import "WebRTCModule+RTCPeerConnection.h"
 #import "WebRTCModule.h"
 #import "WebRTCModuleOptions.h"
+#import "videoEffects/ProcessorProvider.h"
+#import "videoEffects/FaceDetectionProcessor.h"
 
 @interface WebRTCModule ()
+@property (nonatomic, strong) FaceDetectionProcessor *faceDetectionProcessor;
 @end
 
 @implementation WebRTCModule
@@ -80,6 +83,10 @@
         dispatch_queue_attr_t attributes =
             dispatch_queue_attr_make_with_qos_class(DISPATCH_QUEUE_SERIAL, QOS_CLASS_USER_INITIATED, -1);
         _workerQueue = dispatch_queue_create("WebRTCModule.queue", attributes);
+        
+        // Initialize and register face detection processor
+        _faceDetectionProcessor = [[FaceDetectionProcessor alloc] initWithEventEmitter:self];
+        [ProcessorProvider addProcessor:_faceDetectionProcessor forName:@"faceDetection"];
     }
 
     return self;
@@ -120,8 +127,48 @@ RCT_EXPORT_MODULE();
         kEventMediaStreamTrackMuteChanged,
         kEventMediaStreamTrackEnded,
         kEventPeerConnectionOnRemoveTrack,
-        kEventPeerConnectionOnTrack
+        kEventPeerConnectionOnTrack,
+        kEventFaceDetected,
+        kEventBlinkDetected
     ];
+}
+
+RCT_EXPORT_METHOD(enableFaceDetection
+                  : (NSString *)trackId config
+                  : (NSDictionary *)config resolver
+                  : (RCTPromiseResolveBlock)resolve rejecter
+                  : (RCTPromiseRejectBlock)reject) {
+    if (!self.faceDetectionProcessor) {
+        reject(@"E_FACE_DETECTION", @"Face detection not initialized", nil);
+        return;
+    }
+    
+    self.faceDetectionProcessor.isEnabled = YES;
+    
+    // Apply configuration if provided
+    if (config[@"frameSkipCount"]) {
+        self.faceDetectionProcessor.frameSkipCount = [config[@"frameSkipCount"] integerValue];
+    }
+    if (config[@"blinkThreshold"]) {
+        self.faceDetectionProcessor.blinkThreshold = [config[@"blinkThreshold"] floatValue];
+    }
+    
+    resolve(@YES);
+}
+
+RCT_EXPORT_METHOD(disableFaceDetection
+                  : (NSString *)trackId resolver
+                  : (RCTPromiseResolveBlock)resolve rejecter
+                  : (RCTPromiseRejectBlock)reject) {
+    if (!self.faceDetectionProcessor) {
+        reject(@"E_FACE_DETECTION", @"Face detection not initialized", nil);
+        return;
+    }
+    
+    self.faceDetectionProcessor.isEnabled = NO;
+    [self.faceDetectionProcessor reset];
+    
+    resolve(@YES);
 }
 
 @end

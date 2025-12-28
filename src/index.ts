@@ -26,6 +26,19 @@ import RTCRtpTransceiver from './RTCRtpTransceiver';
 import RTCSessionDescription from './RTCSessionDescription';
 import RTCView, { type RTCVideoViewProps, type RTCIOSPIPOptions } from './RTCView';
 import ScreenCapturePickerView from './ScreenCapturePickerView';
+import { configureWebRTC, type WebRTCConfig } from './WebRTCModuleConfig';
+import { useFaceDetection } from './hooks/useFaceDetection';
+import { useBlinkDetection } from './hooks/useBlinkDetection';
+import type {
+    FaceDetectionConfig,
+    FaceDetectionResult,
+    Face,
+    BoundingBox,
+    FaceLandmarks,
+    EyeData,
+    HeadPose,
+    BlinkEvent,
+} from './FaceDetection.types';
 
 Logger.enable(`${Logger.ROOT_PREFIX}:*`);
 
@@ -54,6 +67,20 @@ export {
     registerGlobals,
     startIOSPIP,
     stopIOSPIP,
+    // Configuration
+    configureWebRTC,
+    type WebRTCConfig,
+    // Face Detection
+    useFaceDetection,
+    useBlinkDetection,
+    type FaceDetectionConfig,
+    type FaceDetectionResult,
+    type Face,
+    type BoundingBox,
+    type FaceLandmarks,
+    type EyeData,
+    type HeadPose,
+    type BlinkEvent,
 };
 
 declare const global: any;

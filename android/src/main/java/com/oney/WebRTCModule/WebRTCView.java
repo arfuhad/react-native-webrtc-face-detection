@@ -51,6 +51,12 @@ public class WebRTCView extends ViewGroup {
 
     private static final String TAG = WebRTCModule.TAG;
 
+    // #region agent log helper
+    private void debugLog(String hypothesisId, String message, String data) {
+        Log.d("DEBUG_AGENT", "[" + hypothesisId + "] " + message + " " + data);
+    }
+    // #endregion
+
     /**
      * The number of instances for {@link SurfaceViewRenderer}, used for logging.
      * When the renderer is initialized, it creates a new {@link javax.microedition.khronos.egl.EGLContext}
@@ -374,31 +380,62 @@ public class WebRTCView extends ViewGroup {
      * resources (if rendering is in progress).
      */
     private void removeRendererFromVideoTrack() {
+        // #region agent log
+        debugLog("G", "removeRendererFromVideoTrack", "{\"rendererAttached\":" + rendererAttached + "}");
+        // #endregion
+        
         if (rendererAttached) {
-            if (videoTrack != null) {
-                ThreadUtils.runOnExecutor(() -> {
-                    try {
-                        videoTrack.removeSink(surfaceViewRenderer);
-                    } catch (Throwable tr) {
-                        // XXX If WebRTCModule#mediaStreamTrackRelease has already been
-                        // invoked on videoTrack, then it is no longer safe to call removeSink
-                        // on the instance, it will throw IllegalStateException.
-                    }
-                });
-            }
-
-            surfaceViewRenderer.release();
-            surfaceViewRendererInstances--;
+            // Mark as not attached first to prevent new frames from being processed
             rendererAttached = false;
-
-            // Since this WebRTCView is no longer rendering anything, make sure
-            // surfaceViewRenderer displays nothing as well.
+            
+            // Capture the renderer reference for the async callback
+            final SurfaceViewRenderer rendererToRelease = surfaceViewRenderer;
+            final VideoTrack trackToRemoveFrom = videoTrack;
+            
+            // Reset layout state immediately
             synchronized (layoutSyncRoot) {
                 frameHeight = 0;
                 frameRotation = 0;
                 frameWidth = 0;
             }
             requestSurfaceViewRendererLayout();
+            
+            if (trackToRemoveFrom != null) {
+                // Remove sink and THEN release the renderer, all on the same thread
+                // to avoid race conditions
+                ThreadUtils.runOnExecutor(() -> {
+                    // #region agent log
+                    debugLog("G", "removeSink_called", "{}");
+                    // #endregion
+                    try {
+                        trackToRemoveFrom.removeSink(rendererToRelease);
+                        // #region agent log
+                        debugLog("G", "removeSink_success", "{}");
+                        // #endregion
+                    } catch (Throwable tr) {
+                        // XXX If WebRTCModule#mediaStreamTrackRelease has already been
+                        // invoked on videoTrack, then it is no longer safe to call removeSink
+                        // on the instance, it will throw IllegalStateException.
+                        // #region agent log
+                        debugLog("G", "removeSink_error", "{\"error\":\"" + tr.getMessage() + "\"}");
+                        // #endregion
+                    }
+                    
+                    // Now release the renderer AFTER removeSink completes
+                    // #region agent log
+                    debugLog("G", "surfaceViewRenderer_release_called", "{}");
+                    // #endregion
+                    rendererToRelease.release();
+                    surfaceViewRendererInstances--;
+                });
+            } else {
+                // No track, just release the renderer
+                // #region agent log
+                debugLog("G", "surfaceViewRenderer_release_called_no_track", "{}");
+                // #endregion
+                rendererToRelease.release();
+                surfaceViewRendererInstances--;
+            }
         }
     }
 
@@ -565,6 +602,10 @@ public class WebRTCView extends ViewGroup {
      * all preconditions for the start of rendering are met.
      */
     private void tryAddRendererToVideoTrack() {
+        // #region agent log
+        debugLog("F", "tryAddRendererToVideoTrack", "{\"rendererAttached\":" + rendererAttached + ",\"hasVideoTrack\":" + (videoTrack != null) + "}");
+        // #endregion
+        
         if (!rendererAttached && videoTrack != null && ViewCompat.isAttachedToWindow(this)) {
             EglBase.Context sharedContext = EglUtils.getRootEglBaseContext();
 
@@ -578,6 +619,9 @@ public class WebRTCView extends ViewGroup {
             try {
                 surfaceViewRenderer.init(sharedContext, rendererEvents);
                 surfaceViewRendererInstances++;
+                // #region agent log
+                debugLog("F", "surfaceViewRenderer_init_success", "{\"instances\":" + surfaceViewRendererInstances + "}");
+                // #endregion
             } catch (Exception e) {
                 Logging.e(
                         TAG, "Failed to initialize surfaceViewRenderer on instance " + surfaceViewRendererInstances, e);
@@ -585,13 +629,21 @@ public class WebRTCView extends ViewGroup {
             }
 
             ThreadUtils.runOnExecutor(() -> {
+                // #region agent log
+                debugLog("G", "addSink_called", "{\"trackId\":\"" + (videoTrack != null ? videoTrack.id() : "null") + "\"}");
+                // #endregion
                 try {
                     videoTrack.addSink(surfaceViewRenderer);
+                    // #region agent log
+                    debugLog("G", "addSink_success", "{}");
+                    // #endregion
                 } catch (Throwable tr) {
                     // XXX If WebRTCModule#mediaStreamTrackRelease has already been
                     // invoked on videoTrack, then it is no longer safe to call addSink
                     // on the instance, it will throw IllegalStateException.
-
+                    // #region agent log
+                    debugLog("G", "addSink_error", "{\"error\":\"" + tr.getMessage() + "\"}");
+                    // #endregion
                     Log.e(TAG, "Failed to add renderer", tr);
                 }
             });

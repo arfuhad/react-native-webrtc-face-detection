@@ -3,6 +3,7 @@ import { NativeModules } from 'react-native';
 
 import getDisplayMedia from './getDisplayMedia';
 import getUserMedia, { Constraints } from './getUserMedia';
+import { isFeatureEnabled } from './WebRTCModuleConfig';
 
 const { WebRTCModule } = NativeModules;
 
@@ -24,8 +25,14 @@ class MediaDevices extends EventTarget<MediaDevicesEventMap> {
      * See: https://w3c.github.io/mediacapture-screen-share/
      *
      * @returns {Promise}
+     * @throws {Error} If screen capture is disabled in module configuration
      */
     getDisplayMedia() {
+        if (!isFeatureEnabled('enableScreenCapture')) {
+            return Promise.reject(new Error(
+                'Screen capture is disabled. Enable it by calling configureWebRTC({ enableScreenCapture: true })'
+            ));
+        }
         return getDisplayMedia();
     }
 

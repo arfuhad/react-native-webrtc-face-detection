@@ -1,4 +1,5 @@
 import { requireNativeComponent, ViewProps } from 'react-native';
+import { FaceDetectionResult, BlinkEvent } from './FaceDetection.types';
 
 /**
  * Native prop validation was removed from RN in:
@@ -81,6 +82,28 @@ export interface RTCVideoViewProps extends ViewProps {
    * @param {number} event.nativeEvent.height - The height of the video.
    */
   onDimensionsChange?: (event: { nativeEvent: { width: number; height: number } }) => void;
+
+  /**
+   * Enable face detection for this video view.
+   * When enabled, face detection will run on the video stream and trigger callbacks.
+   * 
+   * Note: Face detection must also be enabled on the MediaStreamTrack.
+   */
+  enableFaceDetection?: boolean;
+
+  /**
+   * Callback function that is called when faces are detected in the video.
+   * 
+   * @param {FaceDetectionResult} result - The face detection result containing detected faces
+   */
+  onFaceDetected?: (result: FaceDetectionResult) => void;
+
+  /**
+   * Callback function that is called when a blink is detected.
+   * 
+   * @param {BlinkEvent} event - The blink event data
+   */
+  onBlinkDetected?: (event: BlinkEvent) => void;
 }
 
 export interface RTCIOSPIPOptions {

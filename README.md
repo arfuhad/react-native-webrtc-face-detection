@@ -15,6 +15,7 @@ A WebRTC module for React Native.
 | Audio/Video | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | - | - | :heavy_check_mark: | :heavy_check_mark: |
 | Data Channels | :heavy_check_mark: | :heavy_check_mark: | - | - | - | :heavy_check_mark: | :heavy_check_mark: |
 | Screen Capture | :heavy_check_mark: | :heavy_check_mark: | - | - | - | :heavy_check_mark: | :heavy_check_mark: |
+| Face Detection* | :heavy_check_mark: | :heavy_check_mark: | - | - | - | - | - |
 | Plan B | - | - | - | - | - | - | - |
 | Unified Plan* | :heavy_check_mark: | :heavy_check_mark: | - | - | - | :heavy_check_mark: | :heavy_check_mark: |
 | Simulcast* | :heavy_check_mark: | :heavy_check_mark: | - | - | - | :heavy_check_mark: | :heavy_check_mark: |
@@ -36,6 +37,9 @@ Those still in need of Plan B will need to use an older release.
 
 > **Simulcast** - As of version 111.0.0 Simulcast is now possible with ease.  
 Software encode/decode factories have been enabled by default.
+
+> **Face Detection** - NEW! Real-time face detection with eye tracking and blink detection.  
+Powered by native ML frameworks (iOS Vision Framework and Android ML Kit) for high-performance, on-device processing.
 
 ## WebRTC Revision
 
@@ -61,6 +65,7 @@ Don't forget to follow platform guides below to cover any extra required steps.
 - [iOS Install](./Documentation/iOSInstallation.md)
 - [tvOS Install](./Documentation/tvOSInstallation.md)
 - [Basic Usage](./Documentation/BasicUsage.md)
+- [Face Detection Guide](./Documentation/FaceDetection.md) - **NEW!**
 - [Step by Step Call Guide](./Documentation/CallGuide.md)
 - [Improving Call Reliability](./Documentation/ImprovingCallReliability.md)
 - [Migrating to Unified Plan](https://docs.google.com/document/d/1-ZfikoUtoJa9k-GZG1daN0BU3IjIanQ_JSscHxQesvU/edit#heading=h.wuu7dx8tnifl)
