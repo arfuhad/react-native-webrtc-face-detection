@@ -21,6 +21,9 @@ import com.facebook.react.bridge.WritableArray;
 import com.facebook.react.bridge.WritableMap;
 import com.facebook.react.module.annotations.ReactModule;
 import com.facebook.react.modules.core.DeviceEventManagerModule;
+import com.oney.WebRTCModule.videoEffects.ProcessorProvider;
+import com.oney.WebRTCModule.videoEffects.FaceDetectionProcessor;
+import com.oney.WebRTCModule.videoEffects.FaceDetectionProcessorFactory;
 import com.oney.WebRTCModule.webrtcutils.H264AndSoftwareVideoDecoderFactory;
 import com.oney.WebRTCModule.webrtcutils.H264AndSoftwareVideoEncoderFactory;
 
@@ -50,6 +53,7 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
     final Map<String, MediaStream> localStreams;
 
     private final GetUserMediaImpl getUserMediaImpl;
+    private FaceDetectionProcessorFactory faceDetectionProcessorFactory;
 
     public WebRTCModule(ReactApplicationContext reactContext) {
         super(reactContext);
@@ -111,6 +115,10 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
         mAudioDeviceModule = adm;
 
         getUserMediaImpl = new GetUserMediaImpl(this, reactContext);
+        
+        // Initialize and register face detection processor factory
+        faceDetectionProcessorFactory = new FaceDetectionProcessorFactory(reactContext);
+        ProcessorProvider.addProcessor("faceDetection", faceDetectionProcessorFactory);
     }
 
     @NonNull
@@ -1416,5 +1424,57 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void removeListeners(Integer count) {
         // Keep: Required for RN built in Event Emitter Calls.
+    }
+    
+    @ReactMethod
+    public void enableFaceDetection(String trackId, ReadableMap config, Promise promise) {
+        if (faceDetectionProcessorFactory == null) {
+            promise.reject("E_FACE_DETECTION", "Face detection not initialized");
+            return;
+        }
+        
+        try {
+            FaceDetectionProcessor processor = faceDetectionProcessorFactory.getProcessor();
+            processor.setEnabled(true);
+            
+            // Apply configuration if provided
+            if (config != null) {
+                if (config.hasKey("frameSkipCount")) {
+                    processor.setFrameSkipCount(config.getInt("frameSkipCount"));
+                }
+                if (config.hasKey("blinkThreshold")) {
+                    processor.setBlinkThreshold((float) config.getDouble("blinkThreshold"));
+                }
+            }
+            
+            promise.resolve(true);
+        } catch (Exception e) {
+            promise.reject("E_FACE_DETECTION", "Failed to enable face detection: " + e.getMessage());
+        }
+    }
+    
+    @ReactMethod
+    public void disableFaceDetection(String trackId, Promise promise) {
+        if (faceDetectionProcessorFactory == null) {
+            promise.reject("E_FACE_DETECTION", "Face detection not initialized");
+            return;
+        }
+        
+        try {
+            FaceDetectionProcessor processor = faceDetectionProcessorFactory.getProcessor();
+            processor.setEnabled(false);
+            processor.reset();
+            promise.resolve(true);
+        } catch (Exception e) {
+            promise.reject("E_FACE_DETECTION", "Failed to disable face detection: " + e.getMessage());
+        }
+    }
+    
+    @Override
+    public void onCatalystInstanceDestroy() {
+        super.onCatalystInstanceDestroy();
+        if (faceDetectionProcessorFactory != null) {
+            faceDetectionProcessorFactory.cleanup();
+        }
     }
 }

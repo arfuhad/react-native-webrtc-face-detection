@@ -3,8 +3,10 @@ import { NativeModules } from 'react-native';
 
 import { MediaTrackConstraints } from './Constraints';
 import { addListener, removeListener } from './EventEmitter';
+import { FaceDetectionConfig, FaceDetectionResult, BlinkEvent } from './FaceDetection.types';
 import Logger from './Logger';
 import { deepClone, normalizeConstraints } from './RTCUtil';
+import { isFeatureEnabled } from './WebRTCModuleConfig';
 
 const log = new Logger('pc');
 const { WebRTCModule } = NativeModules;
@@ -36,6 +38,16 @@ type MediaStreamTrackEventMap = {
     ended: Event<'ended'>;
     mute: Event<'mute'>;
     unmute: Event<'unmute'>;
+    facedetected: CustomEvent<FaceDetectionResult>;
+    blinkdetected: CustomEvent<BlinkEvent>;
+}
+
+class CustomEvent<T> extends Event {
+    detail: T;
+    constructor(type: string, detail: T) {
+        super(type);
+        this.detail = detail;
+    }
 }
 
 export default class MediaStreamTrack extends EventTarget<MediaStreamTrackEventMap> {
@@ -45,6 +57,7 @@ export default class MediaStreamTrack extends EventTarget<MediaStreamTrackEventM
     _muted: boolean;
     _peerConnectionId: number;
     _readyState: MediaStreamTrackState;
+    _faceDetectionEnabled: boolean = false;
 
     readonly id: string;
     readonly kind: string;
@@ -221,9 +234,73 @@ export default class MediaStreamTrack extends EventTarget<MediaStreamTrackEventM
         });
     }
 
+    /**
+     * Enable face detection for this video track
+     * 
+     * @param config Optional configuration for face detection
+     * @returns Promise that resolves when face detection is enabled
+     * @throws {Error} If face detection is disabled in module configuration
+     */
+    async enableFaceDetection(config?: FaceDetectionConfig): Promise<void> {
+        if (!isFeatureEnabled('enableFaceDetection')) {
+            throw new Error(
+                'Face detection is disabled. Enable it by calling configureWebRTC({ enableFaceDetection: true })'
+            );
+        }
+
+        if (this.kind !== 'video') {
+            throw new Error('Face detection is only available for video tracks');
+        }
+
+        if (this.remote) {
+            throw new Error('Face detection is not supported for remote tracks');
+        }
+
+        await WebRTCModule.enableFaceDetection(this.id, config || {});
+        this._faceDetectionEnabled = true;
+
+        // Set up the video effect if not already applied
+        this._setVideoEffect('faceDetection');
+    }
+
+    /**
+     * Disable face detection for this video track
+     * 
+     * @returns Promise that resolves when face detection is disabled
+     */
+    async disableFaceDetection(): Promise<void> {
+        if (this.kind !== 'video') {
+            throw new Error('Face detection is only available for video tracks');
+        }
+
+        if (!this._faceDetectionEnabled) {
+            return;
+        }
+
+        await WebRTCModule.disableFaceDetection(this.id);
+        this._faceDetectionEnabled = false;
+
+        // Remove the video effect
+        this._setVideoEffects([]);
+    }
+
+    /**
+     * Check if face detection is currently enabled
+     */
+    get isFaceDetectionEnabled(): boolean {
+        return this._faceDetectionEnabled;
+    }
+
     release(): void {
         if (this.remote) {
             return;
+        }
+
+        // Clean up face detection if enabled
+        if (this._faceDetectionEnabled) {
+            this.disableFaceDetection().catch(() => {
+                // Ignore errors during cleanup
+            });
         }
 
         removeListener(this);
@@ -239,3 +316,5 @@ const proto = MediaStreamTrack.prototype;
 defineEventAttribute(proto, 'ended');
 defineEventAttribute(proto, 'mute');
 defineEventAttribute(proto, 'unmute');
+defineEventAttribute(proto, 'facedetected');
+defineEventAttribute(proto, 'blinkdetected');

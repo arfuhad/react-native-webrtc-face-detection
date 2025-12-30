@@ -1,0 +1,55 @@
+{
+  "expo": {
+    "name": "WebRTC Test App",
+    "slug": "expo-webrtc-test",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "webrtctest",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.webrtc.testapp",
+      "infoPlist": {
+        "NSCameraUsageDescription": "This app needs camera access to test WebRTC video streaming",
+        "NSMicrophoneUsageDescription": "This app needs microphone access to test WebRTC audio streaming"
+      },
+      "appleTeamId": "542MS488T7"
+    },
+    "android": {
+      "package": "com.webrtc.testapp",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera for WebRTC testing",
+          "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone for WebRTC testing"
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "15.1"
+          },
+          "android": {
+            "minSdkVersion": 24,
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "kotlinVersion": "1.9.25"
+          }
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

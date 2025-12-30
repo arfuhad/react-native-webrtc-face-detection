@@ -374,3 +374,58 @@ It takes in a number between 0 to 10, defaults to 1.
 const audioTrack = remoteMediaStream.getAudioTracks()[0];
 audioTrack._setVolume(0.5);
 ```
+
+## Face Detection and Eye Tracking
+
+React Native WebRTC includes powerful face detection capabilities with eye tracking and blink detection.
+
+### Quick Start
+
+```javascript
+import { configureWebRTC, useFaceDetection } from 'react-native-webrtc';
+
+// Enable face detection at app startup
+configureWebRTC({ enableFaceDetection: true });
+
+function MyComponent() {
+  const videoTrack = stream?.getVideoTracks()[0];
+  const { detectionResult, enable } = useFaceDetection(videoTrack);
+
+  useEffect(() => {
+    enable();
+  }, [videoTrack]);
+
+  return (
+    <View>
+      {detectionResult && (
+        <Text>Detected {detectionResult.faces.length} faces</Text>
+      )}
+    </View>
+  );
+}
+```
+
+### Features
+
+- **Face Detection**: Detect multiple faces in real-time
+- **Eye Tracking**: Track eye positions and state (open/closed)
+- **Blink Detection**: Count blinks with customizable thresholds
+- **Head Pose**: Yaw, pitch, and roll angles
+- **High Performance**: Optimized native processing (iOS Vision Framework, Android ML Kit)
+
+For comprehensive documentation, see the [Face Detection Guide](./FaceDetection.md).
+
+## Module Configuration
+
+You can configure optional features to optimize bundle size:
+
+```javascript
+import { configureWebRTC } from 'react-native-webrtc';
+
+configureWebRTC({
+  enableScreenCapture: false,  // Disable if not needed
+  enableFaceDetection: true,   // Enable face detection features
+});
+```
+
+This should be called early in your application, before using any WebRTC features.
