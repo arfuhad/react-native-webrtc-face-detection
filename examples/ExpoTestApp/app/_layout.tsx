@@ -9,6 +9,7 @@ function TabBarIcon({ name, color }: { name: string; color: string }) {
     camera: '📹',
     connection: '🔗',
     face: '👤',
+    videocall: '📞',
   };
   return <Text style={{ fontSize: 24 }}>{icons[name] || '●'}</Text>;
 }
@@ -61,6 +62,14 @@ export default function RootLayout() {
             title: 'Face',
             headerTitle: 'Face Detection',
             tabBarIcon: ({ color }) => <TabBarIcon name="face" color={color} />,
+          }}
+        />
+        <Tabs.Screen
+          name="video-call"
+          options={{
+            title: 'Call',
+            headerTitle: 'Video Call',
+            tabBarIcon: ({ color }) => <TabBarIcon name="videocall" color={color} />,
           }}
         />
       </Tabs>

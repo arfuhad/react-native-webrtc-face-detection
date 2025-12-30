@@ -1,40 +1,99 @@
 {
-  "name": "react-native-webrtc",
+  "name": "react-native-webrtc-face-detection",
   "version": "124.0.7",
+  "description": "WebRTC for React Native with real-time face detection, eye tracking, and blink detection powered by native ML frameworks",
+  "author": "arfuhad",
+  "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/react-native-webrtc/react-native-webrtc.git"
+    "url": "git+https://github.com/arfuhad/react-native-webrtc-face-detection.git"
   },
-  "description": "WebRTC for React Native",
-  "license": "MIT",
-  "homepage": "https://github.com/react-native-webrtc/react-native-webrtc",
+  "homepage": "https://github.com/arfuhad/react-native-webrtc-face-detection",
+  "bugs": {
+    "url": "https://github.com/arfuhad/react-native-webrtc-face-detection/issues"
+  },
   "keywords": [
     "react-component",
     "react-native",
     "ios",
     "android",
-    "webrtc"
+    "webrtc",
+    "video",
+    "audio",
+    "media",
+    "streaming",
+    "peer-to-peer",
+    "real-time",
+    "communication",
+    "face-detection",
+    "eye-tracking",
+    "blink-detection",
+    "ml-kit",
+    "vision-framework",
+    "machine-learning",
+    "facial-recognition"
   ],
-  "react-native": "src/index.ts",
-  "types": "lib/typescript/index.d.ts",
   "main": "lib/commonjs/index.js",
   "module": "lib/module/index.js",
+  "types": "lib/typescript/index.d.ts",
+  "react-native": "src/index.ts",
+  "source": "src/index.ts",
+  "exports": {
+    ".": {
+      "import": "./lib/module/index.js",
+      "require": "./lib/commonjs/index.js",
+      "types": "./lib/typescript/index.d.ts"
+    }
+  },
+  "files": [
+    "lib",
+    "src",
+    "android",
+    "ios",
+    "macos",
+    "react-native.config.js",
+    "react-native-webrtc-face-detection.podspec",
+    "!android/build",
+    "!ios/build",
+    "!**/__tests__",
+    "!**/__fixtures__",
+    "!**/__mocks__"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=16"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "dependencies": {
     "base64-js": "1.5.1",
     "debug": "4.3.4",
     "event-target-shim": "6.0.2"
   },
   "peerDependencies": {
+    "react": ">=16.8.0",
     "react-native": ">=0.60.0"
   },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": false
+    },
+    "react-native": {
+      "optional": false
+    }
+  },
   "scripts": {
+    "build": "bob build",
+    "clean": "rm -rf lib",
     "lint": "eslint --max-warnings 0 . && tsc --noEmit",
     "lintfix": "eslint --max-warnings 0 --fix . && tsc --noEmit",
+    "typecheck": "tsc --noEmit",
     "prepare": "husky install && bob build",
-    "format": "tools/format.sh"
-  },
-  "bugs": {
-    "url": "https://github.com/react-native-webrtc/react-native-webrtc/issues"
+    "prepublishOnly": "npm run clean && npm run build",
+    "format": "tools/format.sh",
+    "release": "npm publish"
   },
   "devDependencies": {
     "@types/debug": "4.1.7",

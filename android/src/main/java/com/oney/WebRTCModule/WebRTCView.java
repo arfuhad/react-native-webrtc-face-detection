@@ -421,6 +421,26 @@ public class WebRTCView extends ViewGroup {
                         // #endregion
                     }
                     
+                    // Clear any pending frames before releasing to prevent race conditions
+                    // with the EGL render thread still processing queued frames
+                    try {
+                        rendererToRelease.clearImage();
+                        // #region agent log
+                        debugLog("G", "clearImage_called", "{}");
+                        // #endregion
+                    } catch (Throwable tr) {
+                        // #region agent log
+                        debugLog("G", "clearImage_error", "{\"error\":\"" + tr.getMessage() + "\"}");
+                        // #endregion
+                    }
+                    
+                    // Small delay to allow EGL render thread to finish any in-progress rendering
+                    try {
+                        Thread.sleep(50);
+                    } catch (InterruptedException e) {
+                        // Ignore
+                    }
+                    
                     // Now release the renderer AFTER removeSink completes
                     // #region agent log
                     debugLog("G", "surfaceViewRenderer_release_called", "{}");

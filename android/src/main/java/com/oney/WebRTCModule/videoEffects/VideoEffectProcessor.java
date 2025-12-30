@@ -75,7 +75,10 @@ public class VideoEffectProcessor implements VideoProcessor {
         debugLog("B", "before_sink_release", "{\"sameFrame\":" + sameFrame + "}");
         // #endregion
 
-        mSink.onFrame(outputFrame);
+        // Check if sink is valid before passing frame
+        if (mSink != null) {
+            mSink.onFrame(outputFrame);
+        }
         
         // Only release outputFrame if it's different from the original frame
         // to avoid double-releasing when processors return the same frame

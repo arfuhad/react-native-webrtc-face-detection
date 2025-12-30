@@ -247,6 +247,10 @@ public class FaceDetectionProcessor implements VideoFrameProcessor {
         
         VideoFrame.I420Buffer i420Buffer = null;
         try {
+            // IMPORTANT: Retain the frame before conversion to prevent it from being
+            // released by the EglRenderer while we're using it
+            frame.retain();
+            
             // Convert texture to I420 SYNCHRONOUSLY
             // This creates a new buffer with copied data that we own
             VideoFrame.Buffer buffer = frame.getBuffer();
@@ -260,6 +264,9 @@ public class FaceDetectionProcessor implements VideoFrameProcessor {
             // #region agent log
             debugLog("A", "after_toI420", "{\"i420BufferNull\":" + (i420Buffer == null) + "}");
             // #endregion
+            
+            // Release our retain on the frame - we're done accessing the texture
+            frame.release();
             
             if (i420Buffer != null) {
                 // Create InputImage SYNCHRONOUSLY - this copies the pixel data
@@ -295,6 +302,10 @@ public class FaceDetectionProcessor implements VideoFrameProcessor {
             if (i420Buffer != null) {
                 i420Buffer.release();
             }
+            // Make sure to release the frame retain in case of error
+            try {
+                frame.release();
+            } catch (Exception ignored) {}
         }
         
         // #region agent log

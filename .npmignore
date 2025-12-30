@@ -1,9 +1,68 @@
+# Documentation and examples
 Documentation/
 examples/
+
+# Build artifacts and frameworks
 apple/WebRTC.xcframework
 apple/WebRTC.dSYMs
 android/build/
+ios/build/
+
+# Binaries and archives
 *.jar
 *.tgz
 *.zip
-.github
+
+# Development and CI files
+.github/
+.husky/
+.idea/
+.vscode/
+.cursor/
+
+# Test files
+__tests__/
+__fixtures__/
+__mocks__/
+*.test.js
+*.test.ts
+*.spec.js
+*.spec.ts
+coverage/
+
+# Development config files
+.eslintrc*
+.prettierrc*
+.editorconfig
+tsconfig.json
+babel.config.js
+metro.config.js
+metro.config.macos.js
+
+# Development tools
+tools/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git files
+.git/
+.gitignore
+.gitattributes
+
+# Issue templates
+ISSUE_TEMPLATE.md
+
+# Lock files (consumers will have their own)
+package-lock.json
+yarn.lock
+bun.lock
+pnpm-lock.yaml
+
+# Xcode user data
+xcuserdata/
+*.xcworkspace/
+
+# Node modules (shouldn't be in git anyway)
+node_modules/
