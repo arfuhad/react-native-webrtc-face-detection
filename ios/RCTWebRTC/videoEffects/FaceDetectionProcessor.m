@@ -40,7 +40,7 @@
         _eventEmitter = eventEmitter;
         _isEnabled = NO;
         _frameSkipCount = 3; // Process every 3rd frame by default
-        _blinkThreshold = 0.21; // Standard EAR threshold for blink detection
+        _blinkThreshold = 0.08; // Very low threshold for Vision framework's eye contour-based EAR
         _sequenceRequestHandler = [[VNSequenceRequestHandler alloc] init];
         _eyeStates = [NSMutableDictionary dictionary];
         _frameCounter = 0;
@@ -222,11 +222,18 @@
                           frameHeight:(int)frameHeight
                           boundingBox:(CGRect)boundingBox {
     
+    // When eye landmarks can't be detected, the eye is likely closed
     if (!eyeRegion || eyeRegion.pointCount == 0) {
+        eyeState.wasOpen = eyeState.isOpen;
+        eyeState.isOpen = NO;  // Assume closed when not detected
+        
+        // Check for blink completion (was closed, now we can't detect = still closed)
+        // Blink is detected when eye reopens
+        
         return @{
             @"position": @{@"x": @0, @"y": @0},
-            @"isOpen": @YES,
-            @"openProbability": @1.0,
+            @"isOpen": @NO,
+            @"openProbability": @0.0,
             @"blinkCount": @(eyeState.blinkCount)
         };
     }
@@ -242,27 +249,46 @@
     CGFloat ear = [self calculateEAR:eyeRegion.normalizedPoints count:eyeRegion.pointCount];
     eyeState.currentEAR = ear;
     
-    // Determine if eye is open
+    // Vision's EAR values are high (1-10+), so we use a different threshold
+    // When eye closes, EAR drops significantly
+    // Use adaptive threshold based on running average
+    static CGFloat avgEAR = 3.0;  // Initial estimate for open eye
+    avgEAR = avgEAR * 0.95 + ear * 0.05;  // Exponential moving average
+    
+    // Eye is considered closed if EAR drops below 50% of average
+    CGFloat adaptiveThreshold = avgEAR * 0.5;
+    
     eyeState.wasOpen = eyeState.isOpen;
-    eyeState.isOpen = ear > self.blinkThreshold;
+    eyeState.isOpen = ear > adaptiveThreshold;
+    
+    // Log EAR values periodically for debugging
+    static int logCounter = 0;
+    if (++logCounter % 5 == 0) {
+        NSLog(@"[FaceDetection] EAR: %.3f, avgEAR: %.3f, threshold: %.3f, isOpen: %d, wasOpen: %d", 
+              ear, avgEAR, adaptiveThreshold, eyeState.isOpen, eyeState.wasOpen);
+    }
     
     // Detect blink (transition from open -> closed -> open)
     if (eyeState.wasOpen && !eyeState.isOpen) {
         // Eye just closed, potential blink start
+        NSLog(@"[FaceDetection] Eye closing detected, EAR: %.3f (threshold: %.3f)", ear, adaptiveThreshold);
     } else if (!eyeState.wasOpen && eyeState.isOpen) {
         // Eye just opened, complete blink
         eyeState.blinkCount++;
+        NSLog(@"[FaceDetection] Blink detected! Count: %ld, EAR: %.3f", (long)eyeState.blinkCount, ear);
         
         // Emit blink event
         if (self.eventEmitter) {
             [self.eventEmitter sendEventWithName:@"blinkDetected" body:@{
-                @"timestamp": @([[NSDate date] timeIntervalSince1970] * 1000)
+                @"timestamp": @([[NSDate date] timeIntervalSince1970] * 1000),
+                @"eye": @"both", // iOS processes both eyes together
+                @"blinkCount": @(eyeState.blinkCount)
             }];
         }
     }
     
-    // Calculate open probability (normalized EAR)
-    CGFloat openProbability = MIN(1.0, MAX(0.0, ear / 0.3));
+    // Calculate open probability (normalized EAR relative to average)
+    CGFloat openProbability = MIN(1.0, MAX(0.0, ear / avgEAR));
     
     return @{
         @"position": @{
@@ -276,17 +302,14 @@
 }
 
 - (CGFloat)calculateEAR:(const CGPoint *)points count:(NSUInteger)count {
-    if (count < 6) {
-        return 1.0; // Assume eye is open if we don't have enough points
+    if (count < 4) {
+        return 3.0; // Return average value if not enough points
     }
     
-    // Eye Aspect Ratio calculation
-    // EAR = (||p2-p6|| + ||p3-p5||) / (2 * ||p1-p4||)
-    // where p1-p6 are the eye landmark points
-    
-    // For simplicity, we'll use a bounding box approach
-    CGFloat minY = CGFLOAT_MAX, maxY = -CGFLOAT_MAX;
+    // Simple bounding box approach for Vision framework's eye contour
+    // Find the extremes of the eye contour
     CGFloat minX = CGFLOAT_MAX, maxX = -CGFLOAT_MAX;
+    CGFloat minY = CGFLOAT_MAX, maxY = -CGFLOAT_MAX;
     
     for (NSUInteger i = 0; i < count; i++) {
         minX = MIN(minX, points[i].x);
@@ -298,10 +321,20 @@
     CGFloat width = maxX - minX;
     CGFloat height = maxY - minY;
     
-    // EAR is ratio of height to width
-    if (width == 0) return 0.0;
+    // Prevent division by zero
+    if (width < 0.0001) return 3.0;
     
-    return height / width;
+    // EAR = height / width (in Vision, this tends to be > 1)
+    CGFloat ear = height / width;
+    
+    // Log raw values periodically for debugging
+    static int earLogCounter = 0;
+    if (++earLogCounter % 30 == 0) {
+        NSLog(@"[FaceDetection] EAR raw: h=%.4f, w=%.4f, ratio=%.3f, points=%lu", 
+              height, width, ear, (unsigned long)count);
+    }
+    
+    return ear;
 }
 
 - (CGPoint)calculateCenterOfPoints:(const CGPoint *)points count:(NSUInteger)count {

@@ -13,7 +13,8 @@
       "infoPlist": {
         "NSCameraUsageDescription": "This app needs camera access to test WebRTC video streaming",
         "NSMicrophoneUsageDescription": "This app needs microphone access to test WebRTC audio streaming"
-      }
+      },
+      "appleTeamId": "542MS488T7"
     },
     "android": {
       "package": "com.webrtc.testapp",
