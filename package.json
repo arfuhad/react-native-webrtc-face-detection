@@ -1,6 +1,6 @@
 {
   "name": "react-native-webrtc-face-detection",
-  "version": "124.0.7",
+  "version": "124.0.8",
   "description": "WebRTC for React Native with real-time face detection, eye tracking, and blink detection powered by native ML frameworks",
   "author": "arfuhad",
   "license": "MIT",
