@@ -1523,11 +1523,7 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
             processor.setEnabled(true);
 
             if (config != null) {
-                float exposure = config.hasKey("exposure") ? (float) config.getDouble("exposure") : 0.0f;
-                float contrast = config.hasKey("contrast") ? (float) config.getDouble("contrast") : 1.0f;
-                float saturation = config.hasKey("saturation") ? (float) config.getDouble("saturation") : 1.0f;
-                float colorTemperature = config.hasKey("colorTemperature") ? (float) config.getDouble("colorTemperature") : 0.0f;
-                processor.updateConfig(exposure, contrast, saturation, colorTemperature);
+                applyImageAdjustmentConfig(processor, config);
             }
 
             promise.resolve(true);
@@ -1547,17 +1543,61 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
             ImageAdjustmentProcessor processor = imageAdjustmentProcessorFactory.getProcessor();
 
             if (config != null) {
-                float exposure = config.hasKey("exposure") ? (float) config.getDouble("exposure") : 0.0f;
-                float contrast = config.hasKey("contrast") ? (float) config.getDouble("contrast") : 1.0f;
-                float saturation = config.hasKey("saturation") ? (float) config.getDouble("saturation") : 1.0f;
-                float colorTemperature = config.hasKey("colorTemperature") ? (float) config.getDouble("colorTemperature") : 0.0f;
-                processor.updateConfig(exposure, contrast, saturation, colorTemperature);
+                applyImageAdjustmentConfig(processor, config);
             }
 
             promise.resolve(true);
         } catch (Exception e) {
             promise.reject("E_IMAGE_ADJUSTMENT", "Failed to update image adjustment: " + e.getMessage());
         }
+    }
+
+    private void applyImageAdjustmentConfig(ImageAdjustmentProcessor processor, ReadableMap config) {
+        float exposure = config.hasKey("exposure") ? (float) config.getDouble("exposure") : 0.0f;
+        float contrast = config.hasKey("contrast") ? (float) config.getDouble("contrast") : 1.0f;
+        float saturation = config.hasKey("saturation") ? (float) config.getDouble("saturation") : 1.0f;
+        float colorTemperature = config.hasKey("colorTemperature") ? (float) config.getDouble("colorTemperature") : 0.0f;
+
+        boolean smoothingEnabled = false;
+        float smoothingDistanceNorm = 8.0f;
+        float smoothingTexelSpacing = 1.0f;
+
+        boolean skinMaskEnabled      = true;
+        int     skinMaskFeatherPx    = 0;
+        boolean skinMaskEyeProtect   = true;
+        boolean skinMaskMouthProtect = true;
+
+        if (config.hasKey("smoothing") && !config.isNull("smoothing")) {
+            ReadableMap smoothing = config.getMap("smoothing");
+            if (smoothing != null) {
+                smoothingEnabled = smoothing.hasKey("enabled") && smoothing.getBoolean("enabled");
+                if (smoothing.hasKey("distanceNormalization")) {
+                    smoothingDistanceNorm = (float) smoothing.getDouble("distanceNormalization");
+                }
+                if (smoothing.hasKey("texelSpacing")) {
+                    smoothingTexelSpacing = (float) smoothing.getDouble("texelSpacing");
+                }
+                if (smoothing.hasKey("skinMask") && !smoothing.isNull("skinMask")) {
+                    ReadableMap skinMask = smoothing.getMap("skinMask");
+                    if (skinMask != null) {
+                        if (skinMask.hasKey("feather")) {
+                            skinMaskFeatherPx = skinMask.getInt("feather");
+                        }
+                        if (skinMask.hasKey("eyeProtect")) {
+                            skinMaskEyeProtect = skinMask.getBoolean("eyeProtect");
+                        }
+                        if (skinMask.hasKey("mouthProtect")) {
+                            skinMaskMouthProtect = skinMask.getBoolean("mouthProtect");
+                        }
+                    }
+                }
+            }
+        }
+
+        processor.updateConfig(exposure, contrast, saturation, colorTemperature,
+                               smoothingEnabled, smoothingDistanceNorm, smoothingTexelSpacing);
+        processor.updateSkinMaskConfig(skinMaskEnabled, skinMaskFeatherPx,
+                                       skinMaskEyeProtect, skinMaskMouthProtect);
     }
 
     @ReactMethod

@@ -22,7 +22,11 @@ import type {
     NoseData,
     FaceDetectionOverlayConfig,
 } from './FaceDetection.types';
-import type { ImageAdjustmentConfig } from './ImageAdjustment.types';
+import type {
+    ImageAdjustmentConfig,
+    ImageAdjustmentSkinMaskConfig,
+    ImageAdjustmentSmoothingConfig,
+} from './ImageAdjustment.types';
 import Logger from './Logger';
 import mediaDevices from './MediaDevices';
 import MediaStream from './MediaStream';
@@ -94,6 +98,8 @@ export {
     // Image Adjustment
     useImageAdjustment,
     type ImageAdjustmentConfig,
+    type ImageAdjustmentSmoothingConfig,
+    type ImageAdjustmentSkinMaskConfig,
 };
 
 declare const global: any;

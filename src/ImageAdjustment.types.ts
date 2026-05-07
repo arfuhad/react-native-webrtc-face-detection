@@ -1,4 +1,66 @@
 /**
+ * Skin-targeted masking configuration for bilateral smoothing. When present
+ * on the parent smoothing config, the smoothing pass is restricted to a
+ * feathered skin mask derived from ML Kit face detection (bbox + eye/mouth
+ * landmarks). Requires `faceDetection` to be enabled on the same track;
+ * without a detected face the smoothing pass no-ops rather than falling
+ * back to whole-frame smoothing.
+ */
+export interface ImageAdjustmentSkinMaskConfig {
+    /**
+     * Feather radius in pixels along the mask edge. 0 = auto (derived from face height).
+     * Default: 0 (auto).
+     */
+    feather?: number;
+    /**
+     * Preserve detail around the eyes (no smoothing in eye region). Default: true.
+     */
+    eyeProtect?: boolean;
+    /**
+     * Preserve detail around the mouth / lips. Default: true.
+     */
+    mouthProtect?: boolean;
+}
+
+/**
+ * Edge-preserving bilateral smoothing applied to the luminance (Y) plane
+ * before tone-mapping. Intended for skin softening without blurring
+ * high-contrast edges (eyelashes, glasses frames, face silhouettes).
+ *
+ * Runs as a native shader pass (Metal on iOS, OpenGL ES on Android).
+ * Face detection runs on raw pre-smoothing pixels, so landmarks and
+ * blink detection are unaffected by this stage.
+ */
+export interface ImageAdjustmentSmoothingConfig {
+    /**
+     * Gate the smoothing stage. When false, the stage is skipped entirely
+     * and produces a zero-overhead pass-through.
+     */
+    enabled: boolean;
+
+    /**
+     * Range-similarity divisor. Larger values widen the tolerance for
+     * luminance difference, producing stronger smoothing with less edge
+     * preservation. Smaller values preserve more edges.
+     * Range: 2.5 to 8.0.
+     */
+    distanceNormalization: number;
+
+    /**
+     * Spatial sampling step in texels. Effectively widens the blur kernel
+     * without increasing tap count. Larger values produce a softer look.
+     * Range: 1.0 to 4.0.
+     */
+    texelSpacing: number;
+
+    /**
+     * Skin mask configuration. Requires `faceDetection` to be enabled on the same track,
+     * otherwise smoothing no-ops (it will NOT fall back to whole-frame smoothing).
+     */
+    skinMask?: ImageAdjustmentSkinMaskConfig;
+}
+
+/**
  * Configuration options for image adjustment processing
  */
 export interface ImageAdjustmentConfig {
@@ -34,4 +96,10 @@ export interface ImageAdjustmentConfig {
      * @default 0.0
      */
     colorTemperature?: number;
+
+    /**
+     * Optional edge-preserving skin smoothing pass applied to the Y plane
+     * before tone-mapping. Omit or set `enabled: false` for zero overhead.
+     */
+    smoothing?: ImageAdjustmentSmoothingConfig;
 }

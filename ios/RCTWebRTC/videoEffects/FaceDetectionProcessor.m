@@ -1,10 +1,12 @@
 #import "FaceDetectionProcessor.h"
+#import "FaceResultCache.h"
 #import "I420Converter.h"
 #import <React/RCTEventEmitter.h>
 #import <WebRTC/RTCVideoFrame.h>
 #import <WebRTC/RTCVideoFrameBuffer.h>
 #import <WebRTC/RTCCVPixelBuffer.h>
 #import <CoreVideo/CoreVideo.h>
+#import <QuartzCore/QuartzCore.h>
 @import MLKitVision;
 
 // Eye state tracking with smoothing, temporal validation, and confidence
@@ -416,6 +418,12 @@
     NSMutableSet<NSNumber *> *seenTrackingIds = [NSMutableSet set];
     NSTimeInterval now = [[NSDate date] timeIntervalSince1970] * 1000;
 
+    // Track whether we successfully published a face into the cache this
+    // frame. If ML Kit returned no faces at all we still want to explicitly
+    // invalidate the cache so ImageAdjustmentProcessor sees a stale-empty
+    // state rather than a lingering bbox from seconds ago.
+    BOOL publishedFaceThisFrame = NO;
+
     for (NSInteger i = 0; i < faces.count; i++) {
         MLKFace *face = faces[i];
 
@@ -561,6 +569,7 @@
         MLKFaceLandmark *mouthBottom = [face landmarkOfType:MLKFaceLandmarkTypeMouthBottom];
         MLKFaceLandmark *mouthLeft = [face landmarkOfType:MLKFaceLandmarkTypeMouthLeft];
         MLKFaceLandmark *mouthRight = [face landmarkOfType:MLKFaceLandmarkTypeMouthRight];
+        CGPoint mouthCenterPx = CGPointMake(-1, -1);
         if (mouthBottom && mouthLeft && mouthRight) {
             CGFloat centerX = (mouthLeft.position.x + mouthRight.position.x) / 2.0;
             CGFloat centerY = mouthBottom.position.y;
@@ -571,6 +580,30 @@
                 @"width": @(mouthWidth),
                 @"height": @(mouthHeight)
             };
+            mouthCenterPx = CGPointMake(centerX, centerY);
+        }
+
+        // Publish into the shared cache so ImageAdjustmentProcessor can build
+        // a skin mask. We only publish the primary (first) face — skin
+        // smoothing is single-face by design.
+        if (!publishedFaceThisFrame) {
+            CGPoint leftEyePx  = CGPointMake(-1, -1);
+            CGPoint rightEyePx = CGPointMake(-1, -1);
+            MLKFaceLandmark *leftEyeLm  = [face landmarkOfType:MLKFaceLandmarkTypeLeftEye];
+            MLKFaceLandmark *rightEyeLm = [face landmarkOfType:MLKFaceLandmarkTypeRightEye];
+            if (leftEyeLm)  { leftEyePx  = CGPointMake(leftEyeLm.position.x,  leftEyeLm.position.y); }
+            if (rightEyeLm) { rightEyePx = CGPointMake(rightEyeLm.position.x, rightEyeLm.position.y); }
+
+            FDCFaceResult fr;
+            fr.valid          = YES;
+            fr.bbox           = boundingBox;
+            fr.leftEye        = leftEyePx;
+            fr.rightEye       = rightEyePx;
+            fr.mouthCenter    = mouthCenterPx;
+            fr.faceWidth      = boundingBox.size.width;
+            fr.timestampNanos = (int64_t)(CACurrentMediaTime() * 1e9);
+            [[FaceResultCache sharedInstance] publish:fr];
+            publishedFaceThisFrame = YES;
         }
 
         // Extract nose landmark
@@ -600,6 +633,14 @@
         };
 
         [facesArray addObject:faceDict];
+    }
+
+    // If no face was published this frame, invalidate the cache so stale
+    // bbox data from a previous frame doesn't drive the skin mask.
+    if (!publishedFaceThisFrame) {
+        FDCFaceResult empty = {0};
+        empty.valid = NO;
+        [[FaceResultCache sharedInstance] publish:empty];
     }
 
     // Evict stale eye state entries for faces no longer in frame (Phase 1.2)

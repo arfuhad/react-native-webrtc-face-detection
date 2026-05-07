@@ -332,7 +332,7 @@ public class FaceDetectionProcessor implements VideoFrameProcessor {
             Log.e(TAG, "Error in process: " + e.getMessage());
             isProcessing.set(false);
         }
-        
+
         // #region agent log
         debugLog("D", "process_returning_frame", "{}");
         // #endregion
@@ -342,12 +342,12 @@ public class FaceDetectionProcessor implements VideoFrameProcessor {
     /**
      * Process an I420 buffer directly (fast path for non-texture buffers)
      */
-    private void processI420Buffer(VideoFrame.I420Buffer i420Buffer, int rotation, 
+    private void processI420Buffer(VideoFrame.I420Buffer i420Buffer, int rotation,
                                     int frameWidth, int frameHeight) {
         try {
             InputImage image = createInputImageFromI420Buffer(i420Buffer, rotation);
             if (image != null) {
-                runFaceDetection(image, frameWidth, frameHeight);
+                runFaceDetection(image, rotation, frameWidth, frameHeight);
             } else {
                 isProcessing.set(false);
             }
@@ -406,8 +406,9 @@ public class FaceDetectionProcessor implements VideoFrameProcessor {
                 
                 if (image != null && faceDetectionHandler != null) {
                     // Now we can safely process async - the InputImage has its own data copy
+                    final int capturedRotation = rotation;
                     faceDetectionHandler.post(() -> {
-                        runFaceDetection(image, frameWidth, frameHeight);
+                        runFaceDetection(image, capturedRotation, frameWidth, frameHeight);
                     });
                 } else {
                     isProcessing.set(false);
@@ -439,12 +440,12 @@ public class FaceDetectionProcessor implements VideoFrameProcessor {
     /**
      * Run ML Kit face detection on the prepared image
      */
-    private void runFaceDetection(InputImage image, int frameWidth, int frameHeight) {
+    private void runFaceDetection(InputImage image, int rotation, int frameWidth, int frameHeight) {
         try {
             Task<List<Face>> result = detector.process(image);
-            
+
             result.addOnSuccessListener(faces -> {
-                processFaceResults(faces, frameWidth, frameHeight);
+                processFaceResults(faces, rotation, frameWidth, frameHeight);
                 isProcessing.set(false);
             }).addOnFailureListener(e -> {
                 Log.e(TAG, "Face detection failed: " + e.getMessage());
@@ -526,10 +527,28 @@ public class FaceDetectionProcessor implements VideoFrameProcessor {
         long blinkDuration = 0;
     }
 
-    private void processFaceResults(List<Face> faces, int frameWidth, int frameHeight) {
+    private void processFaceResults(List<Face> faces, int rotation, int frameWidth, int frameHeight) {
         WritableArray facesArray = Arguments.createArray();
         java.util.HashSet<Integer> seenTrackingIds = new java.util.HashSet<>();
         long now = System.currentTimeMillis();
+
+        // Derive pre-rotation (source I420) dimensions so we can map ML Kit
+        // coordinates (which are expressed in the rotated/upright frame) back
+        // into the raw buffer coordinates that ImageAdjustmentProcessor sees.
+        final int srcWidth;
+        final int srcHeight;
+        if (rotation == 90 || rotation == 270) {
+            srcWidth = frameHeight;
+            srcHeight = frameWidth;
+        } else {
+            srcWidth = frameWidth;
+            srcHeight = frameHeight;
+        }
+
+        // Track whether we published anything for this frame. If ML Kit returned
+        // no faces we still want to invalidate the cache so stale data (from
+        // seconds ago) doesn't linger in ImageAdjustmentProcessor.
+        boolean publishedFaceThisFrame = false;
 
         for (Face face : faces) {
             WritableMap faceMap = Arguments.createMap();
@@ -707,6 +726,28 @@ public class FaceDetectionProcessor implements VideoFrameProcessor {
 
             faceMap.putMap("landmarks", landmarks);
             facesArray.pushMap(faceMap);
+
+            // Publish this face into the single-slot cache so
+            // ImageAdjustmentProcessor can build a skin mask. We only publish
+            // the first face (single-slot cache) — if multiple faces are
+            // present the first ML-Kit-returned one wins.
+            if (!publishedFaceThisFrame) {
+                FaceResultCache.FaceResult cached =
+                        buildCacheResult(face, mouthBottom, mouthLeft, mouthRight,
+                                         rotation, srcWidth, srcHeight);
+                if (cached != null) {
+                    FaceResultCache.getInstance().publish(cached);
+                    publishedFaceThisFrame = true;
+                }
+            }
+        }
+
+        // If no face was published this frame, invalidate the cache so
+        // ImageAdjustmentProcessor sees stale-empty rather than a lingering bbox.
+        if (!publishedFaceThisFrame) {
+            FaceResultCache.FaceResult empty = new FaceResultCache.FaceResult();
+            empty.valid = false;
+            FaceResultCache.getInstance().publish(empty);
         }
 
         // Evict stale eye state entries for faces no longer in frame
@@ -722,6 +763,117 @@ public class FaceDetectionProcessor implements VideoFrameProcessor {
         result.putInt("frameHeight", frameHeight);
 
         sendEvent(EVENT_FACE_DETECTED, result);
+    }
+
+    /**
+     * Build a {@link FaceResultCache.FaceResult} from an ML Kit face. ML Kit
+     * returns coordinates in the rotated (upright) frame; we un-rotate them
+     * back into source-I420 space so {@link ImageAdjustmentProcessor} can
+     * mask directly on the pre-rotation buffer.
+     */
+    private FaceResultCache.FaceResult buildCacheResult(Face face,
+                                                        FaceLandmark mouthBottom,
+                                                        FaceLandmark mouthLeft,
+                                                        FaceLandmark mouthRight,
+                                                        int rotation,
+                                                        int srcWidth,
+                                                        int srcHeight) {
+        if (face == null) {
+            return null;
+        }
+        Rect bb = face.getBoundingBox();
+        if (bb == null || bb.width() <= 0 || bb.height() <= 0) {
+            return null;
+        }
+
+        // Un-rotate the bbox corners. Because rotations of 90/270 swap axes,
+        // we un-rotate all four corners and take the resulting bbox.
+        float[] tl = unrotatePoint(bb.left, bb.top, rotation, srcWidth, srcHeight);
+        float[] tr = unrotatePoint(bb.right, bb.top, rotation, srcWidth, srcHeight);
+        float[] bl = unrotatePoint(bb.left, bb.bottom, rotation, srcWidth, srcHeight);
+        float[] br = unrotatePoint(bb.right, bb.bottom, rotation, srcWidth, srcHeight);
+
+        float minX = Math.min(Math.min(tl[0], tr[0]), Math.min(bl[0], br[0]));
+        float minY = Math.min(Math.min(tl[1], tr[1]), Math.min(bl[1], br[1]));
+        float maxX = Math.max(Math.max(tl[0], tr[0]), Math.max(bl[0], br[0]));
+        float maxY = Math.max(Math.max(tl[1], tr[1]), Math.max(bl[1], br[1]));
+
+        int bx = Math.max(0, Math.round(minX));
+        int by = Math.max(0, Math.round(minY));
+        int bw = Math.min(srcWidth - bx, Math.round(maxX - minX));
+        int bh = Math.min(srcHeight - by, Math.round(maxY - minY));
+        if (bw <= 0 || bh <= 0) {
+            return null;
+        }
+
+        FaceResultCache.FaceResult r = new FaceResultCache.FaceResult();
+        r.valid = true;
+        r.bboxX = bx;
+        r.bboxY = by;
+        r.bboxW = bw;
+        r.bboxH = bh;
+        r.faceWidth = bw;
+        r.timestampNanos = System.nanoTime();
+
+        FaceLandmark leftEye = face.getLandmark(FaceLandmark.LEFT_EYE);
+        if (leftEye != null && leftEye.getPosition() != null) {
+            float[] p = unrotatePoint(leftEye.getPosition().x, leftEye.getPosition().y,
+                                      rotation, srcWidth, srcHeight);
+            r.leftEyeX = p[0];
+            r.leftEyeY = p[1];
+        }
+        FaceLandmark rightEye = face.getLandmark(FaceLandmark.RIGHT_EYE);
+        if (rightEye != null && rightEye.getPosition() != null) {
+            float[] p = unrotatePoint(rightEye.getPosition().x, rightEye.getPosition().y,
+                                      rotation, srcWidth, srcHeight);
+            r.rightEyeX = p[0];
+            r.rightEyeY = p[1];
+        }
+        if (mouthBottom != null && mouthLeft != null && mouthRight != null
+                && mouthBottom.getPosition() != null
+                && mouthLeft.getPosition() != null
+                && mouthRight.getPosition() != null) {
+            float mcx = (mouthLeft.getPosition().x + mouthRight.getPosition().x) * 0.5f;
+            float mcy = mouthBottom.getPosition().y;
+            float[] p = unrotatePoint(mcx, mcy, rotation, srcWidth, srcHeight);
+            r.mouthX = p[0];
+            r.mouthY = p[1];
+        }
+        return r;
+    }
+
+    /**
+     * Map a point (x, y) from the rotated/upright ML-Kit coordinate system
+     * back to the source (pre-rotation) I420 buffer coordinate system.
+     *
+     * {@code rotation} is the frame rotation in degrees (0/90/180/270) where
+     * rotation==90 means the source needs to be rotated 90° CW to be upright.
+     *
+     * Source dims are {@code srcWidth x srcHeight} (pre-rotation).
+     */
+    private static float[] unrotatePoint(float ux, float uy, int rotation, int srcWidth, int srcHeight) {
+        float sx;
+        float sy;
+        switch (rotation) {
+            case 90:
+                sx = uy;
+                sy = (srcHeight - 1) - ux;
+                break;
+            case 180:
+                sx = (srcWidth - 1) - ux;
+                sy = (srcHeight - 1) - uy;
+                break;
+            case 270:
+                sx = (srcWidth - 1) - uy;
+                sy = ux;
+                break;
+            case 0:
+            default:
+                sx = ux;
+                sy = uy;
+                break;
+        }
+        return new float[] { sx, sy };
     }
 
     private WritableMap processEye(FaceLandmark eyeLandmark, Float openProbability,

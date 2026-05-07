@@ -1,6 +1,11 @@
+// Skin-mask smoothing requires `faceDetection` enabled on the same track; otherwise smoothing no-ops.
 import { useState, useEffect, useCallback, useRef } from 'react';
 
-import { ImageAdjustmentConfig } from '../ImageAdjustment.types';
+import {
+    ImageAdjustmentConfig,
+    ImageAdjustmentSkinMaskConfig,
+    ImageAdjustmentSmoothingConfig,
+} from '../ImageAdjustment.types';
 import MediaStreamTrack from '../MediaStreamTrack';
 
 const DEFAULT_CONFIG: Required<ImageAdjustmentConfig> = {
@@ -8,6 +13,16 @@ const DEFAULT_CONFIG: Required<ImageAdjustmentConfig> = {
     contrast: 1,
     saturation: 1,
     colorTemperature: 0,
+    smoothing: {
+        enabled: false,
+        distanceNormalization: 8,
+        texelSpacing: 1,
+        skinMask: {
+            feather: 0,
+            eyeProtect: true,
+            mouthProtect: true,
+        },
+    },
 };
 
 /**
@@ -115,6 +130,29 @@ export function useImageAdjustment(
         updateConfig({ colorTemperature: value });
     }, [ updateConfig ]);
 
+    const setSmoothing = useCallback((value: Partial<ImageAdjustmentSmoothingConfig>) => {
+        const merged: ImageAdjustmentSmoothingConfig = {
+            ...configRef.current.smoothing,
+            ...value,
+        };
+
+        updateConfig({ smoothing: merged });
+    }, [ updateConfig ]);
+
+    const setSkinMask = useCallback((partial: Partial<ImageAdjustmentSkinMaskConfig>) => {
+        const currentSmoothing = configRef.current.smoothing;
+        const mergedSkinMask: ImageAdjustmentSkinMaskConfig = {
+            ...currentSmoothing.skinMask,
+            ...partial,
+        };
+        const merged: ImageAdjustmentSmoothingConfig = {
+            ...currentSmoothing,
+            skinMask: mergedSkinMask,
+        };
+
+        updateConfig({ smoothing: merged });
+    }, [ updateConfig ]);
+
     // Cleanup on unmount
     useEffect(() => () => {
         if (isEnabled) {
@@ -167,6 +205,23 @@ export function useImageAdjustment(
          * Set color temperature (-1.0 to 1.0)
          */
         setColorTemperature,
+
+        /**
+         * Set bilateral skin smoothing. Pass a partial config; unspecified
+         * fields are preserved from the current smoothing state.
+         *
+         * Ranges: distanceNormalization 2.5–8.0, texelSpacing 1.0–4.0.
+         */
+        setSmoothing,
+
+        /**
+         * Set skin mask options for smoothing. Merges the provided partial
+         * into the existing `smoothing.skinMask`.
+         *
+         * Requires `faceDetection` enabled on the same track; otherwise
+         * smoothing no-ops (no whole-frame fallback).
+         */
+        setSkinMask,
 
         /**
          * Any error that occurred

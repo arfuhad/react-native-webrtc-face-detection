@@ -29,6 +29,7 @@
 
 - (instancetype)initWithEventEmitter:(RCTEventEmitter *)eventEmitter;
 - (void)reset;
+- (void)startCalibrationIfNeeded;
 
 @end
 
