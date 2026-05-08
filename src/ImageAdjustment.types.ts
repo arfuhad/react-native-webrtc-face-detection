@@ -57,7 +57,7 @@ export interface ImageAdjustmentSmoothingConfig {
      * Number of full bilateral passes (horizontal + vertical each).
      * More iterations compound the smoothing effect while preserving
      * edges at each step. This is the primary control for smoothing strength.
-     * Range: 1 to 8. Default: 4.
+     * Range: 1 to 8. Default: 3.
      *
      * Performance: each iteration adds ~1ms at 720p, ~3ms at 1080p.
      * Use 2-3 on low-end devices or 1080p video; 4-6 for strong smoothing.

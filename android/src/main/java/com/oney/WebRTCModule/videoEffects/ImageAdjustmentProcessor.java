@@ -46,6 +46,7 @@ public class ImageAdjustmentProcessor implements VideoFrameProcessor {
     private static final long FACE_CACHE_MAX_AGE_NANOS = 500_000_000L;
 
     private volatile boolean isEnabled      = false;
+    private volatile boolean isBypassed     = false;
     private volatile boolean toneIsDefault  = true;
 
     // Reusable per-frame buffers. Reallocated only on resolution change.
@@ -76,6 +77,14 @@ public class ImageAdjustmentProcessor implements VideoFrameProcessor {
 
     public boolean getEnabled() {
         return this.isEnabled;
+    }
+
+    public void setBypassed(boolean bypassed) {
+        this.isBypassed = bypassed;
+    }
+
+    public boolean getBypassed() {
+        return this.isBypassed;
     }
 
     /**
@@ -146,7 +155,7 @@ public class ImageAdjustmentProcessor implements VideoFrameProcessor {
         this.smoothingEnabled = false;
         this.smoothingDistanceNormalization = 3.0f;
         this.smoothingTexelSpacing = 2.0f;
-        this.smoothingIterations = 4;
+        this.smoothingIterations = 3;
         this.smoothingMix = 0.0f;
         this.smoothingSkinBrightness = 0.0f;
         this.smoothingSmoothChroma = true;
@@ -201,7 +210,7 @@ public class ImageAdjustmentProcessor implements VideoFrameProcessor {
 
     @Override
     public VideoFrame process(VideoFrame frame, SurfaceTextureHelper textureHelper) {
-        if (!isEnabled) {
+        if (!isEnabled || isBypassed) {
             return frame;
         }
 

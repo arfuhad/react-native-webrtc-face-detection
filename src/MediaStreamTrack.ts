@@ -360,6 +360,20 @@ export default class MediaStreamTrack extends EventTarget<MediaStreamTrackEventM
     }
 
     /**
+     * Bypass image adjustment processing without resetting config.
+     * When bypassed, the processor returns the original frame unchanged.
+     * Useful for before/after comparison without going through the
+     * full enable/disable lifecycle.
+     */
+    async bypassImageAdjustment(bypass: boolean): Promise<void> {
+        if (this.kind !== 'video') {
+            throw new Error('Image adjustment is only available for video tracks');
+        }
+
+        await WebRTCModule.bypassImageAdjustment(this.id, bypass);
+    }
+
+    /**
      * Check if image adjustment is currently enabled
      */
     get isImageAdjustmentEnabled(): boolean {

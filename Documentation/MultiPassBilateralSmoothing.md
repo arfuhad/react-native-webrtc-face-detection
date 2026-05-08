@@ -28,7 +28,7 @@ interface ImageAdjustmentSmoothingConfig {
 | `enabled` | boolean | `false` | Gate the smoothing stage |
 | `distanceNormalization` | 1.0–8.0 | `3.0` | Range-similarity divisor. Larger = wider tolerance = stronger smoothing |
 | `texelSpacing` | 1.0–4.0 | `2.0` | Spatial sampling step in texels. Larger = wider blur kernel |
-| `iterations` | 1–8 | `4` | Number of full bilateral passes. Primary smoothing strength |
+| `iterations` | 1–8 | `3` | Number of full bilateral passes. Primary smoothing strength |
 | `mix` | 0.0–1.0 | `0.0` | **Texture Preservation**. Blends original skin texture back in. 0.2-0.3 is recommended to avoid "plastic" skin. |
 | `skinBrightness` | 0.0–1.0 | `0.0` | **Flawless Glow**. Targeted brightening of the skin region within the mask. |
 | `smoothChroma` | boolean | `true` | Apply 3x3 box blur on U/V planes to reduce skin discoloration |
@@ -77,6 +77,8 @@ Each iteration adds GPU overhead.
 
 | Iterations | Quality | 720p (ms) | 1080p (ms) | Notes |
 |-----------|---------|-----------|------------|-------|
-| 4 | Standard | ~4 | ~12 | Good balance |
+| 2 | Subtle | ~2 | ~6 | Good for older devices |
+| **3 (default)** | **Noticeable** | **~3** | **~9** | **Recommended balance** |
+| 4 | Strong | ~4 | ~12 | Instagram level |
 | 6 | Flawless | ~6 | ~18 | High-end look |
 | 8 | Maximum | ~8 | ~24 | Heavy load |

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -89,8 +89,6 @@ export default function ImageAdjustmentScreen() {
   const [activePreset, setActivePreset] = useState<string>('Normal');
   const [sheetOpen, setSheetOpen] = useState(false);
   const [resolution, setResolution] = useState<'480p' | '720p' | '1080p'>('720p');
-  const [isComparing, setIsComparing] = useState(false);
-  const configBeforeHoldRef = useRef<ImageAdjustmentConfig | null>(null);
 
   const {
     config,
@@ -104,6 +102,7 @@ export default function ImageAdjustmentScreen() {
     setColorTemperature,
     setSmoothing,
     setSkinMask,
+    setBypass,
     error,
   } = useImageAdjustment(videoTrack);
 
@@ -113,7 +112,7 @@ export default function ImageAdjustmentScreen() {
     disable: disableFaceDetection,
   } = useFaceDetection(videoTrack);
 
-  const smoothing = config.smoothing ?? { enabled: false, distanceNormalization: 3, texelSpacing: 2, iterations: 4, mix: 0, skinBrightness: 0, smoothChroma: true };
+  const smoothing = config.smoothing ?? { enabled: false, distanceNormalization: 3, texelSpacing: 2, iterations: 3, mix: 0, skinBrightness: 0, smoothChroma: true };
   const skinMask = smoothing.skinMask ?? { feather: 0, eyeProtect: true, mouthProtect: true };
 
   const resMap = {
@@ -149,8 +148,6 @@ export default function ImageAdjustmentScreen() {
   }, [resolution]);
 
   const stopCamera = useCallback(async () => {
-    setIsComparing(false);
-
     if (isEnabled) {
       await disable();
     }
@@ -268,23 +265,10 @@ export default function ImageAdjustmentScreen() {
           variant={isStreaming ? 'danger' : 'primary'}
           style={styles.bottomBarButton}
         />
-        {isStreaming && (isEnabled || isComparing) && (
+        {isStreaming && isEnabled && (
           <Pressable
-            onPressIn={async () => {
-              configBeforeHoldRef.current = config;
-              setIsComparing(true);
-              await disable();
-            }}
-            onPressOut={async () => {
-              setIsComparing(false);
-              const saved = configBeforeHoldRef.current;
-              if (saved) {
-                await enable();
-                await updateConfig(saved);
-              } else {
-                await enable();
-              }
-            }}
+            onPressIn={() => setBypass(true)}
+            onPressOut={() => setBypass(false)}
             style={({ pressed }) => [
               styles.holdButton,
               pressed && styles.holdButtonPressed,

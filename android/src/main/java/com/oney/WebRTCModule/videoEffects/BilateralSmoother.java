@@ -83,7 +83,7 @@ public class BilateralSmoother {
     private volatile boolean enabled = false;
     private volatile float distanceNorm = 3.0f;
     private volatile float texelSpacing = 2.0f;
-    private volatile int iterations = 4;
+    private volatile int iterations = 3;
     private volatile float mix = 0.0f;
     private volatile float skinBrightness = 0.0f;
 

@@ -254,7 +254,23 @@ RCT_EXPORT_METHOD(disableImageAdjustment
     }
 
     self.imageAdjustmentProcessor.isEnabled = NO;
+    self.imageAdjustmentProcessor.isBypassed = NO;
     [self.imageAdjustmentProcessor reset];
+
+    resolve(@YES);
+}
+
+RCT_EXPORT_METHOD(bypassImageAdjustment
+                  : (NSString *)trackId bypass
+                  : (BOOL)bypass resolver
+                  : (RCTPromiseResolveBlock)resolve rejecter
+                  : (RCTPromiseRejectBlock)reject) {
+    if (!self.imageAdjustmentProcessor) {
+        reject(@"E_IMAGE_ADJUSTMENT", @"Image adjustment not initialized", nil);
+        return;
+    }
+
+    self.imageAdjustmentProcessor.isBypassed = bypass;
 
     resolve(@YES);
 }

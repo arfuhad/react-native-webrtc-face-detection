@@ -123,7 +123,7 @@ A bilateral filter considers both spatial distance and luminance similarity when
 | `smoothing.enabled` | boolean | - | `false` | Gate the smoothing stage |
 | `smoothing.distanceNormalization` | number | 1.0–8.0 | `3.0` | Range-similarity divisor. Larger = stronger smoothing, fewer edges preserved |
 | `smoothing.texelSpacing` | number | 1.0–4.0 | `2.0` | Spatial sampling step. Larger = wider blur kernel |
-| `smoothing.iterations` | number | 1–8 | `4` | Number of full bilateral passes. Primary control for smoothing strength |
+| `smoothing.iterations` | number | 1–8 | `3` | Number of full bilateral passes. Primary control for smoothing strength |
 | `smoothing.smoothChroma` | boolean | - | `true` | Apply 3x3 box blur on U/V planes to reduce skin discoloration |
 | `smoothing.skinMask` | object | - | - | Skin mask config (requires face detection) |
 

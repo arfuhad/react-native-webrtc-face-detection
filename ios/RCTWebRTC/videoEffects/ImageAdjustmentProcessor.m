@@ -45,15 +45,17 @@ static inline int sm_clampi(int v, int lo, int hi) {
     self = [super init];
     if (self) {
         _isEnabled = NO;
+        _isBypassed = NO;
         _exposure = 0.0;
         _contrast = 1.0;
         _saturation = 1.0;
         _colorTemperature = 0.0;
         _smoothingEnabled = NO;
         _smoothingDistanceNormalization = 3.0;
-        _smoothingTexelSpacing = 2.0;
-        _smoothingIterations = 4;
-        _smoothingMix = 0.0;
+        _smoothingTexelSpacing = 2.0f;
+        _smoothingIterations = 3;
+        _smoothingMix = 0.0f;
+
         _smoothingSkinBrightness = 0.0;
         _smoothingSmoothChroma = YES;
         _skinMaskEnabled = YES;
@@ -155,9 +157,10 @@ static inline int sm_clampi(int v, int lo, int hi) {
         _colorTemperature = 0.0;
         _smoothingEnabled = NO;
         _smoothingDistanceNormalization = 3.0;
-        _smoothingTexelSpacing = 2.0;
-        _smoothingIterations = 4;
-        _smoothingMix = 0.0;
+        _smoothingTexelSpacing = 2.0f;
+        _smoothingIterations = 3;
+        _smoothingMix = 0.0f;
+
         _smoothingSkinBrightness = 0.0;
         _smoothingSmoothChroma = YES;
         _skinMaskEnabled = YES;
@@ -264,7 +267,7 @@ static inline int sm_clampi(int v, int lo, int hi) {
 #pragma mark - VideoFrameProcessorDelegate
 
 - (RTCVideoFrame *)capturer:(RTCVideoCapturer *)capturer didCaptureVideoFrame:(RTCVideoFrame *)frame {
-    if (!self.isEnabled) {
+    if (!self.isEnabled || self.isBypassed) {
         return frame;
     }
 

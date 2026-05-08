@@ -1561,7 +1561,7 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
         boolean smoothingEnabled = false;
         float smoothingDistanceNorm = 3.0f;
         float smoothingTexelSpacing = 2.0f;
-        int smoothingIterations = 4;
+        int smoothingIterations = 3;
         float smoothingMix = 0.0f;
         float smoothingSkinBrightness = 0.0f;
         boolean smoothingSmoothChroma = true;
@@ -1629,10 +1629,27 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
         try {
             ImageAdjustmentProcessor processor = imageAdjustmentProcessorFactory.getProcessor();
             processor.setEnabled(false);
+            processor.setBypassed(false);
             processor.reset();
             promise.resolve(true);
         } catch (Exception e) {
             promise.reject("E_IMAGE_ADJUSTMENT", "Failed to disable image adjustment: " + e.getMessage());
+        }
+    }
+
+    @ReactMethod
+    public void bypassImageAdjustment(String trackId, boolean bypass, Promise promise) {
+        if (imageAdjustmentProcessorFactory == null) {
+            promise.reject("E_IMAGE_ADJUSTMENT", "Image adjustment not initialized");
+            return;
+        }
+
+        try {
+            ImageAdjustmentProcessor processor = imageAdjustmentProcessorFactory.getProcessor();
+            processor.setBypassed(bypass);
+            promise.resolve(true);
+        } catch (Exception e) {
+            promise.reject("E_IMAGE_ADJUSTMENT", "Failed to bypass image adjustment: " + e.getMessage());
         }
     }
 

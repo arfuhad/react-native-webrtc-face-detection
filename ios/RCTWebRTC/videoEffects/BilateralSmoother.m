@@ -31,7 +31,7 @@
         _enabled = NO;
         _distanceNorm = 3.0f;
         _texelSpacing = 2.0f;
-        _iterations = 4;
+        _iterations = 3;
         _mix = 0.0f;
         _skinBrightness = 0.0f;
         _setupAttempted = NO;

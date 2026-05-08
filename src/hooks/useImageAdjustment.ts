@@ -17,7 +17,7 @@ const DEFAULT_CONFIG: Required<ImageAdjustmentConfig> = {
         enabled: false,
         distanceNormalization: 3,
         texelSpacing: 2,
-        iterations: 4,
+        iterations: 3,
         mix: 0,
         skinBrightness: 0,
         smoothChroma: true,
@@ -157,6 +157,18 @@ export function useImageAdjustment(
         updateConfig({ smoothing: merged });
     }, [ updateConfig ]);
 
+    const setBypass = useCallback(async (bypass: boolean) => {
+        if (!track) {
+            return;
+        }
+
+        try {
+            await track.bypassImageAdjustment(bypass);
+        } catch (err) {
+            setError(err as Error);
+        }
+    }, [ track ]);
+
     // Cleanup on unmount
     useEffect(() => () => {
         if (isEnabled) {
@@ -226,6 +238,13 @@ export function useImageAdjustment(
          * smoothing no-ops (no whole-frame fallback).
          */
         setSkinMask,
+
+        /**
+         * Bypass image adjustment processing without resetting config.
+         * When bypassed, the processor returns the original frame unchanged.
+         * Useful for before/after comparison.
+         */
+        setBypass,
 
         /**
          * Any error that occurred
