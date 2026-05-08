@@ -1559,8 +1559,12 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
         float colorTemperature = config.hasKey("colorTemperature") ? (float) config.getDouble("colorTemperature") : 0.0f;
 
         boolean smoothingEnabled = false;
-        float smoothingDistanceNorm = 8.0f;
-        float smoothingTexelSpacing = 1.0f;
+        float smoothingDistanceNorm = 3.0f;
+        float smoothingTexelSpacing = 2.0f;
+        int smoothingIterations = 4;
+        float smoothingMix = 0.0f;
+        float smoothingSkinBrightness = 0.0f;
+        boolean smoothingSmoothChroma = true;
 
         boolean skinMaskEnabled      = true;
         int     skinMaskFeatherPx    = 0;
@@ -1576,6 +1580,18 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
                 }
                 if (smoothing.hasKey("texelSpacing")) {
                     smoothingTexelSpacing = (float) smoothing.getDouble("texelSpacing");
+                }
+                if (smoothing.hasKey("iterations")) {
+                    smoothingIterations = smoothing.getInt("iterations");
+                }
+                if (smoothing.hasKey("mix")) {
+                    smoothingMix = (float) smoothing.getDouble("mix");
+                }
+                if (smoothing.hasKey("skinBrightness")) {
+                    smoothingSkinBrightness = (float) smoothing.getDouble("skinBrightness");
+                }
+                if (smoothing.hasKey("smoothChroma")) {
+                    smoothingSmoothChroma = smoothing.getBoolean("smoothChroma");
                 }
                 if (smoothing.hasKey("skinMask") && !smoothing.isNull("skinMask")) {
                     ReadableMap skinMask = smoothing.getMap("skinMask");
@@ -1595,7 +1611,10 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
         }
 
         processor.updateConfig(exposure, contrast, saturation, colorTemperature,
-                               smoothingEnabled, smoothingDistanceNorm, smoothingTexelSpacing);
+                smoothingEnabled, smoothingDistanceNorm, smoothingTexelSpacing,
+                smoothingIterations, smoothingMix, smoothingSkinBrightness,
+                smoothingSmoothChroma);
+
         processor.updateSkinMaskConfig(skinMaskEnabled, skinMaskFeatherPx,
                                        skinMaskEyeProtect, skinMaskMouthProtect);
     }

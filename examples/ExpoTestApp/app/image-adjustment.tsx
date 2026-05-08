@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -42,28 +42,42 @@ const BEAUTY_PRESETS: Preset[] = [
     name: 'Beauty Off',
     config: {
       exposure: 0, contrast: 1, saturation: 1, colorTemperature: 0,
-      smoothing: { enabled: false, distanceNormalization: 8, texelSpacing: 1 },
+      smoothing: { enabled: false, distanceNormalization: 3, texelSpacing: 2, iterations: 4, mix: 0, skinBrightness: 0, smoothChroma: true },
     },
   },
   {
-    name: 'Beauty L1',
+    name: 'Smooth Only',
     config: {
-      exposure: 0.08, contrast: 0.92, saturation: 0.96, colorTemperature: 0.04,
-      smoothing: { enabled: true, distanceNormalization: 6, texelSpacing: 2 },
+      exposure: 0, contrast: 1, saturation: 1, colorTemperature: 0,
+      smoothing: { enabled: true, distanceNormalization: 2.5, texelSpacing: 2, iterations: 4, mix: 0, skinBrightness: 0, smoothChroma: true },
     },
   },
   {
-    name: 'Beauty L2',
+    name: 'Subtle',
     config: {
-      exposure: 0.14, contrast: 0.85, saturation: 0.93, colorTemperature: 0.08,
-      smoothing: { enabled: true, distanceNormalization: 4, texelSpacing: 3 },
+      exposure: 0.05, contrast: 0.95, saturation: 0.98, colorTemperature: 0.02,
+      smoothing: { enabled: true, distanceNormalization: 3.5, texelSpacing: 2, iterations: 2, mix: 0.3, skinBrightness: 0.05, smoothChroma: true },
     },
   },
   {
-    name: 'Beauty L3',
+    name: 'Medium',
     config: {
-      exposure: 0.20, contrast: 0.78, saturation: 0.90, colorTemperature: 0.12,
-      smoothing: { enabled: true, distanceNormalization: 2.5, texelSpacing: 4 },
+      exposure: 0.1, contrast: 0.9, saturation: 0.95, colorTemperature: 0.05,
+      smoothing: { enabled: true, distanceNormalization: 3, texelSpacing: 2.5, iterations: 4, mix: 0.2, skinBrightness: 0.1, smoothChroma: true },
+    },
+  },
+  {
+    name: 'Flawless',
+    config: {
+      exposure: 0.15, contrast: 0.85, saturation: 0.92, colorTemperature: 0.1,
+      smoothing: { enabled: true, distanceNormalization: 2.5, texelSpacing: 3, iterations: 6, mix: 0.15, skinBrightness: 0.2, smoothChroma: true },
+    },
+  },
+  {
+    name: 'Porcelain',
+    config: {
+      exposure: 0.2, contrast: 0.8, saturation: 0.9, colorTemperature: 0.15,
+      smoothing: { enabled: true, distanceNormalization: 2, texelSpacing: 3.5, iterations: 8, mix: 0.1, skinBrightness: 0.25, smoothChroma: true },
     },
   },
 ];
@@ -74,6 +88,9 @@ export default function ImageAdjustmentScreen() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [activePreset, setActivePreset] = useState<string>('Normal');
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [resolution, setResolution] = useState<'480p' | '720p' | '1080p'>('720p');
+  const [isComparing, setIsComparing] = useState(false);
+  const configBeforeHoldRef = useRef<ImageAdjustmentConfig | null>(null);
 
   const {
     config,
@@ -96,17 +113,24 @@ export default function ImageAdjustmentScreen() {
     disable: disableFaceDetection,
   } = useFaceDetection(videoTrack);
 
-  const smoothing = config.smoothing ?? { enabled: false, distanceNormalization: 8, texelSpacing: 1 };
+  const smoothing = config.smoothing ?? { enabled: false, distanceNormalization: 3, texelSpacing: 2, iterations: 4, mix: 0, skinBrightness: 0, smoothChroma: true };
   const skinMask = smoothing.skinMask ?? { feather: 0, eyeProtect: true, mouthProtect: true };
+
+  const resMap = {
+    '480p': { width: 640, height: 480 },
+    '720p': { width: 1280, height: 720 },
+    '1080p': { width: 1920, height: 1080 },
+  };
 
   const startCamera = useCallback(async () => {
     try {
+      const res = resMap[resolution];
       const mediaStream = await mediaDevices.getUserMedia({
         audio: false,
         video: {
           facingMode: 'user',
-          width: { ideal: 640 },
-          height: { ideal: 480 },
+          width: { ideal: res.width },
+          height: { ideal: res.height },
         },
       });
 
@@ -122,9 +146,11 @@ export default function ImageAdjustmentScreen() {
       console.error('Failed to start camera:', err);
       Alert.alert('Camera Error', 'Failed to access camera. Check permissions.');
     }
-  }, []);
+  }, [resolution]);
 
   const stopCamera = useCallback(async () => {
+    setIsComparing(false);
+
     if (isEnabled) {
       await disable();
     }
@@ -167,8 +193,10 @@ export default function ImageAdjustmentScreen() {
       colorTemperature: 0,
       smoothing: {
         enabled: false,
-        distanceNormalization: 8,
-        texelSpacing: 1,
+        distanceNormalization: 3,
+        texelSpacing: 2,
+        iterations: 4,
+        smoothChroma: true,
         skinMask: { feather: 0, eyeProtect: true, mouthProtect: true },
       },
     });
@@ -213,7 +241,7 @@ export default function ImageAdjustmentScreen() {
             )}
             {smoothing.enabled && (
               <View style={[styles.pill, styles.pillActive]}>
-                <Text style={styles.pillText}>Smooth</Text>
+                <Text style={styles.pillText}>x{smoothing.iterations ?? 4}</Text>
               </View>
             )}
             {faceDetectionEnabled && (
@@ -240,6 +268,33 @@ export default function ImageAdjustmentScreen() {
           variant={isStreaming ? 'danger' : 'primary'}
           style={styles.bottomBarButton}
         />
+        {isStreaming && (isEnabled || isComparing) && (
+          <Pressable
+            onPressIn={async () => {
+              configBeforeHoldRef.current = config;
+              setIsComparing(true);
+              await disable();
+            }}
+            onPressOut={async () => {
+              setIsComparing(false);
+              const saved = configBeforeHoldRef.current;
+              if (saved) {
+                await enable();
+                await updateConfig(saved);
+              } else {
+                await enable();
+              }
+            }}
+            style={({ pressed }) => [
+              styles.holdButton,
+              pressed && styles.holdButtonPressed,
+            ]}
+          >
+            <Text style={styles.holdButtonText}>
+              {'Hold to Compare'}
+            </Text>
+          </Pressable>
+        )}
         {isStreaming && (
           <Button
             title="Adjustments"
@@ -257,8 +312,12 @@ export default function ImageAdjustmentScreen() {
         animationType="slide"
         onRequestClose={() => setSheetOpen(false)}
       >
-        <Pressable style={styles.backdrop} onPress={() => setSheetOpen(false)}>
-          <Pressable style={styles.sheet} onPress={() => { /* swallow */ }}>
+        <View style={styles.backdrop}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setSheetOpen(false)}
+          />
+          <View style={styles.sheet}>
             <View style={styles.sheetHandle} />
             <View style={styles.sheetHeader}>
               <Text style={styles.sheetTitle}>Image Adjustments</Text>
@@ -274,9 +333,23 @@ export default function ImageAdjustmentScreen() {
             <ScrollView
               contentContainerStyle={styles.sheetContent}
               showsVerticalScrollIndicator={false}
+              bounces={false}
+              keyboardShouldPersistTaps="handled"
             >
               <Card style={styles.controlsCard}>
                 <Text style={styles.sectionTitle}>Pipeline</Text>
+                <Text style={styles.quickLabel}>Resolution (restart camera to apply)</Text>
+                <View style={styles.quickButtonRow}>
+                  {(['480p', '720p', '1080p'] as const).map(r => (
+                    <Button
+                      key={r}
+                      title={r}
+                      onPress={() => setResolution(r)}
+                      variant={resolution === r ? 'primary' : 'outline'}
+                      style={styles.quickButton}
+                    />
+                  ))}
+                </View>
                 <Button
                   title={isEnabled ? 'Disable Adjustments' : 'Enable Adjustments'}
                   onPress={toggleAdjustment}
@@ -343,11 +416,23 @@ export default function ImageAdjustmentScreen() {
                   />
                   {smoothing.enabled && (
                     <>
+                      <Text style={styles.quickLabel}>Quick Iterations</Text>
+                      <View style={styles.quickButtonRow}>
+                        {[1, 2, 3, 4, 6, 8].map(n => (
+                          <Button
+                            key={n}
+                            title={String(n)}
+                            onPress={() => setSmoothing({ iterations: n })}
+                            variant={(smoothing.iterations ?? 4) === n ? 'primary' : 'outline'}
+                            style={styles.quickButton}
+                          />
+                        ))}
+                      </View>
                       <SliderControl
                         label="Distance Normalization"
                         value={smoothing.distanceNormalization}
                         onValueChange={v => setSmoothing({ distanceNormalization: v })}
-                        minimumValue={2.5}
+                        minimumValue={1}
                         maximumValue={8}
                       />
                       <SliderControl
@@ -357,11 +442,45 @@ export default function ImageAdjustmentScreen() {
                         minimumValue={1}
                         maximumValue={4}
                       />
+                      <SliderControl
+                        label="Iterations"
+                        value={smoothing.iterations ?? 4}
+                        onValueChange={v => setSmoothing({ iterations: Math.round(v) })}
+                        minimumValue={1}
+                        maximumValue={8}
+                        step={1}
+                      />
+                      <SliderControl
+                        label="Texture Preservation (Mix)"
+                        value={smoothing.mix ?? 0}
+                        onValueChange={v => setSmoothing({ mix: v })}
+                        minimumValue={0}
+                        maximumValue={1}
+                        step={0.01}
+                      />
+                      <SliderControl
+                        label="Skin Brightness (Glow)"
+                        value={smoothing.skinBrightness ?? 0}
+                        onValueChange={v => setSmoothing({ skinBrightness: v })}
+                        minimumValue={0}
+                        maximumValue={1}
+                        step={0.01}
+                      />
+                      <View style={styles.toggleRow}>
+                        <Text style={styles.toggleLabel}>Chroma Smoothing</Text>
+                        <Button
+                          title={smoothing.smoothChroma !== false ? 'On' : 'Off'}
+                          onPress={() => setSmoothing({ smoothChroma: smoothing.smoothChroma === false })}
+                          variant={smoothing.smoothChroma !== false ? 'primary' : 'outline'}
+                          style={styles.toggleButton}
+                        />
+                      </View>
                     </>
                   )}
                   <Text style={styles.hintText}>
                     Larger distance normalization = stronger smoothing, fewer edges preserved.
-                    Larger texel spacing = wider blur.
+                    Larger texel spacing = wider blur. More iterations = stronger smoothing (1-8).
+                    Chroma smoothing reduces skin discoloration.
                   </Text>
                 </Card>
               )}
@@ -488,6 +607,26 @@ export default function ImageAdjustmentScreen() {
                           value={smoothing.texelSpacing.toFixed(2)}
                           status="warning"
                         />
+                        <StatusIndicator
+                          label="Iterations"
+                          value={smoothing.iterations ?? 4}
+                          status="warning"
+                        />
+                        <StatusIndicator
+                          label="Mix (Texture)"
+                          value={(smoothing.mix ?? 0).toFixed(2)}
+                          status={smoothing.mix ? 'warning' : 'info'}
+                        />
+                        <StatusIndicator
+                          label="Skin Brightness"
+                          value={(smoothing.skinBrightness ?? 0).toFixed(2)}
+                          status={smoothing.skinBrightness ? 'warning' : 'info'}
+                        />
+                        <StatusIndicator
+                          label="Chroma Smooth"
+                          value={smoothing.smoothChroma !== false}
+                          status={smoothing.smoothChroma !== false ? 'success' : 'info'}
+                        />
                       </>
                     )}
                   </>
@@ -504,11 +643,14 @@ export default function ImageAdjustmentScreen() {
                 <Text style={styles.infoList}>{'\u2022'} Contrast — tonal range (Y plane)</Text>
                 <Text style={styles.infoList}>{'\u2022'} Saturation — color intensity (U/V planes)</Text>
                 <Text style={styles.infoList}>{'\u2022'} Color Temperature — warm/cool shift (U/V planes)</Text>
-                <Text style={styles.infoList}>{'\u2022'} Skin Smoothing — bilateral blur (Metal / GLES) gated by face-detected skin mask</Text>
+                <Text style={styles.infoList}>{'\u2022'} Skin Smoothing — multi-pass bilateral blur (Metal / GLES) gated by face-detected skin mask</Text>
+                <Text style={styles.infoList}>{'\u2022'} Texture Preservation (Mix) — blends original texture back for a natural "flawless" look</Text>
+                <Text style={styles.infoList}>{'\u2022'} Skin Brightness — targeted glow within the skin region</Text>
+                <Text style={styles.infoList}>{'\u2022'} Chroma Smoothing — 3x3 box blur on U/V planes to reduce skin discoloration</Text>
               </Card>
             </ScrollView>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
     </View>
   );
@@ -591,6 +733,26 @@ const styles = StyleSheet.create({
   bottomBarButton: {
     flex: 1,
   },
+  holdButton: {
+    flex: 1,
+    backgroundColor: colors.surfaceLight,
+    borderRadius: borderRadius.sm,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.sm,
+  },
+  holdButtonPressed: {
+    backgroundColor: 'rgba(239,68,68,0.3)',
+    borderColor: colors.error,
+  },
+  holdButtonText: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
   backdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -665,6 +827,22 @@ const styles = StyleSheet.create({
   },
   toggleButton: {
     minWidth: 80,
+  },
+  quickLabel: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  quickButtonRow: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  quickButton: {
+    flex: 1,
+    minWidth: 0,
   },
   presetGrid: {
     flexDirection: 'row',

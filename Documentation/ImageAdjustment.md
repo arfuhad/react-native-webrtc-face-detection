@@ -6,6 +6,7 @@ React Native WebRTC includes real-time image adjustment capabilities for video t
 
 - [Getting Started](#getting-started)
 - [Configuration](#configuration)
+- [Skin Smoothing](#skin-smoothing)
 - [API Reference](#api-reference)
 - [React Hooks](#react-hooks)
 - [Examples](#examples)
@@ -102,6 +103,58 @@ await track.disableImageAdjustment();
 | `colorTemperature` | number | -1.0 to 1.0 | 0.0 | Color cast. Negative is cooler (blue), positive is warmer (orange). |
 
 All fields are optional. Omitted fields use their default values.
+
+## Skin Smoothing
+
+Edge-preserving bilateral smoothing applied to the luminance (Y) plane, with optional chroma (U/V) smoothing. Smooths skin texture and hides blemishes while preserving high-contrast edges (eyes, lips, hair, glasses).
+
+### How It Works
+
+A bilateral filter considers both spatial distance and luminance similarity when blending pixels. Neighbors that are far away or have very different luminance contribute less, preserving sharp edges while smoothing low-contrast skin texture.
+
+**Multi-pass iteration**: Running the bilateral kernel multiple times compounds the smoothing effect. Each iteration runs a horizontal + vertical pass. More iterations = stronger smoothing while edges stay sharp at each step.
+
+**Chroma smoothing**: A 3x3 box blur on U/V planes reduces skin discoloration (redness, dark spots). Very cheap at ~0.05ms/frame since chroma is quarter-resolution.
+
+### Skin Smoothing Configuration
+
+| Property | Type | Range | Default | Description |
+|----------|------|-------|---------|-------------|
+| `smoothing.enabled` | boolean | - | `false` | Gate the smoothing stage |
+| `smoothing.distanceNormalization` | number | 1.0–8.0 | `3.0` | Range-similarity divisor. Larger = stronger smoothing, fewer edges preserved |
+| `smoothing.texelSpacing` | number | 1.0–4.0 | `2.0` | Spatial sampling step. Larger = wider blur kernel |
+| `smoothing.iterations` | number | 1–8 | `4` | Number of full bilateral passes. Primary control for smoothing strength |
+| `smoothing.smoothChroma` | boolean | - | `true` | Apply 3x3 box blur on U/V planes to reduce skin discoloration |
+| `smoothing.skinMask` | object | - | - | Skin mask config (requires face detection) |
+
+### Beauty Presets
+
+```typescript
+const BEAUTY_PRESETS = {
+  subtle: {
+    smoothing: { enabled: true, distanceNormalization: 3.5, texelSpacing: 2, iterations: 2, smoothChroma: true },
+  },
+  medium: {
+    smoothing: { enabled: true, distanceNormalization: 3, texelSpacing: 2.5, iterations: 3, smoothChroma: true },
+  },
+  strong: {
+    smoothing: { enabled: true, distanceNormalization: 2.5, texelSpacing: 3, iterations: 4, smoothChroma: true },
+  },
+};
+```
+
+### Performance Tradeoffs
+
+| Iterations | Quality | 720p (ms/frame) | 1080p (ms/frame) |
+|-----------|---------|-----------------|-------------------|
+| 1 | Barely visible | ~1 | ~3 |
+| 2 | Subtle | ~2 | ~6 |
+| 3 | Medium | ~3 | ~9 |
+| **4 (default)** | **Noticeable** | **~4** | **~12** |
+| 6 | Strong | ~6 | ~18 |
+| 8 | Maximum | ~8 | ~24 |
+
+At 30fps the frame budget is ~33ms. Reduce iterations or resolution on lower-end devices.
 
 ## API Reference
 
@@ -345,6 +398,8 @@ Image adjustment processes every video frame using pre-computed lookup tables (L
 
 At 30fps with 720p, image adjustment adds roughly 1-2ms per frame - well within the 33ms frame budget.
 
+**With skin smoothing enabled** (4 iterations), add ~4ms at 720p or ~12ms at 1080p. Chroma smoothing adds ~0.05ms. See [Performance Tradeoffs](#performance-tradeoffs) for details.
+
 ### Best Practices
 
 1. **Disable when not needed**: Call `disableImageAdjustment()` when the user isn't actively adjusting
@@ -429,6 +484,31 @@ await track.applyConstraints({ width: 1920, height: 1080 });
 - Lower camera resolution: `{ width: 640, height: 480 }`
 - Reduce frame rate: `{ frameRate: 15 }`
 - Disable when not actively adjusting
+- Reduce smoothing iterations: `{ iterations: 2 }`
+- Disable chroma smoothing: `{ smoothChroma: false }`
+
+### Smoothing Not Visible
+
+**Problem**: Skin smoothing enabled but no visible effect
+
+**Possible causes:**
+1. Only 1 iteration (very subtle)
+2. Face detection not enabled (skin mask requires a detected face)
+3. `distanceNormalization` too low (below 3 preserves too many edges)
+
+**Solutions:**
+- Increase iterations to 3-4
+- Enable face detection on the same track
+- Increase `distanceNormalization` to 5-6
+
+### Smoothing Looks Artificial
+
+**Problem**: Skin looks too smooth or plasticky
+
+**Solutions:**
+- Reduce iterations to 2-3
+- Increase `distanceNormalization` to 5-6 to preserve more edges
+- Reduce `texelSpacing` to 1.5-2 to narrow the kernel
 
 ### Cannot Enable on Remote Track
 

@@ -15,8 +15,12 @@ const DEFAULT_CONFIG: Required<ImageAdjustmentConfig> = {
     colorTemperature: 0,
     smoothing: {
         enabled: false,
-        distanceNormalization: 8,
-        texelSpacing: 1,
+        distanceNormalization: 3,
+        texelSpacing: 2,
+        iterations: 4,
+        mix: 0,
+        skinBrightness: 0,
+        smoothChroma: true,
         skinMask: {
             feather: 0,
             eyeProtect: true,

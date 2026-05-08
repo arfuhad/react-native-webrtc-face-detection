@@ -19,7 +19,10 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)updateConfig:(BOOL)enabled
         distanceNorm:(float)distanceNorm
-        texelSpacing:(float)texelSpacing;
+        texelSpacing:(float)texelSpacing
+          iterations:(int)iterations
+                 mix:(float)mix
+      skinBrightness:(float)skinBrightness;
 
 /**
  * Smooth a Y plane in place. `srcPlane` and `dstPlane` may alias or be

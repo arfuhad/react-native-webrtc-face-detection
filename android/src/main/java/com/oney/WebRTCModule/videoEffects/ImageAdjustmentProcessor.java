@@ -29,8 +29,12 @@ public class ImageAdjustmentProcessor implements VideoFrameProcessor {
 
     // Smoothing config
     private volatile boolean smoothingEnabled              = false;
-    private volatile float   smoothingDistanceNormalization = 8.0f;
-    private volatile float   smoothingTexelSpacing          = 1.0f;
+    private volatile float   smoothingDistanceNormalization = 3.0f;
+    private volatile float   smoothingTexelSpacing          = 2.0f;
+    private volatile int     smoothingIterations            = 4;
+    private volatile float   smoothingMix                   = 0.0f;
+    private volatile float   smoothingSkinBrightness        = 0.0f;
+    private volatile boolean smoothingSmoothChroma          = true;
 
     // Skin mask config
     public volatile boolean skinMaskEnabled      = true;
@@ -93,7 +97,8 @@ public class ImageAdjustmentProcessor implements VideoFrameProcessor {
      */
     public void updateConfig(float exposure, float contrast, float saturation, float colorTemperature,
                              boolean smoothingEnabled, float smoothingDistanceNormalization,
-                             float smoothingTexelSpacing) {
+                             float smoothingTexelSpacing, int smoothingIterations, float smoothingMix,
+                             float smoothingSkinBrightness, boolean smoothingSmoothChroma) {
         this.exposure = exposure;
         this.contrast = contrast;
         this.saturation = saturation;
@@ -101,6 +106,10 @@ public class ImageAdjustmentProcessor implements VideoFrameProcessor {
         this.smoothingEnabled = smoothingEnabled;
         this.smoothingDistanceNormalization = smoothingDistanceNormalization;
         this.smoothingTexelSpacing = smoothingTexelSpacing;
+        this.smoothingIterations = smoothingIterations;
+        this.smoothingMix = smoothingMix;
+        this.smoothingSkinBrightness = smoothingSkinBrightness;
+        this.smoothingSmoothChroma = smoothingSmoothChroma;
         rebuildLUTs();
         syncSmootherConfig();
         // Reset log-once flags so users get fresh diagnostics after reconfig.
@@ -135,8 +144,12 @@ public class ImageAdjustmentProcessor implements VideoFrameProcessor {
         this.saturation = 1.0f;
         this.colorTemperature = 0.0f;
         this.smoothingEnabled = false;
-        this.smoothingDistanceNormalization = 8.0f;
-        this.smoothingTexelSpacing = 1.0f;
+        this.smoothingDistanceNormalization = 3.0f;
+        this.smoothingTexelSpacing = 2.0f;
+        this.smoothingIterations = 4;
+        this.smoothingMix = 0.0f;
+        this.smoothingSkinBrightness = 0.0f;
+        this.smoothingSmoothChroma = true;
         this.skinMaskEnabled = true;
         this.skinMaskFeatherPx = 0;
         this.skinMaskEyeProtect = true;
@@ -149,10 +162,10 @@ public class ImageAdjustmentProcessor implements VideoFrameProcessor {
     }
 
     private void syncSmootherConfig() {
-        smoother.updateConfig(smoothingEnabled,
-                              smoothingDistanceNormalization,
-                              smoothingTexelSpacing);
+        smoother.updateConfig(smoothingEnabled, smoothingDistanceNormalization,
+                smoothingTexelSpacing, smoothingIterations, smoothingMix, smoothingSkinBrightness);
     }
+
 
     private void rebuildLUTs() {
         toneIsDefault = (exposure == 0.0f && contrast == 1.0f &&
@@ -194,6 +207,9 @@ public class ImageAdjustmentProcessor implements VideoFrameProcessor {
 
         // Fast path: no tone adjustment AND no smoothing -> pass through.
         boolean smoothingActive = smoothingEnabled;
+        boolean smoothChroma = smoothingSmoothChroma;
+        float localSmoothingMix = smoothingMix;
+        float localSmoothingSkinBrightness = smoothingSkinBrightness;
         if (toneIsDefault && !smoothingActive) {
             return frame;
         }
@@ -346,18 +362,34 @@ public class ImageAdjustmentProcessor implements VideoFrameProcessor {
                                  toneIsDefault ? (byte) srcVal : localYLUT[srcVal]);
                     }
                     // Blend zone
+                    int mix8 = Math.round(localSmoothingMix * 255.0f);
+                    int brightnessGain = Math.round(localSmoothingSkinBrightness * 40.0f);
+
                     for (int col = workX0; col < workX1; col++) {
                         int m = scratchMask[maskRow + col] & 0xFF;
                         int sVal = srcY.get(srcOffset + col) & 0xFF;
                         int result;
                         if (m == 0) {
                             result = sVal;
-                        } else if (m == 255) {
-                            result = smoothedY.get(maskRow + col) & 0xFF;
                         } else {
                             int dVal = smoothedY.get(maskRow + col) & 0xFF;
-                            // (m * dVal + (255 - m) * sVal + 127) / 255
-                            result = (m * dVal + (255 - m) * sVal + 127) / 255;
+
+                            // Texture preservation (mix)
+                            if (mix8 > 0) {
+                                dVal = (mix8 * sVal + (255 - mix8) * dVal + 127) / 255;
+                            }
+
+                            // Skin brightening (targeted glow)
+                            if (brightnessGain > 0) {
+                                dVal = Math.max(0, Math.min(255, dVal + brightnessGain));
+                            }
+
+                            if (m == 255) {
+                                result = dVal;
+                            } else {
+                                // (m * dVal + (255 - m) * sVal + 127) / 255
+                                result = (m * dVal + (255 - m) * sVal + 127) / 255;
+                            }
                         }
                         if (!toneIsDefault) {
                             result = localYLUT[result] & 0xFF;
@@ -391,8 +423,45 @@ public class ImageAdjustmentProcessor implements VideoFrameProcessor {
             }
 
             // --- U plane ---
+            // Chroma smoothing: separable 3x3 box blur to reduce skin discoloration.
             dstU.position(0);
-            if (!toneIsDefault) {
+            if (smoothingActive && smoothChroma && smoothedAvail) {
+                byte[] scratchChroma = new byte[chromaWidth * chromaHeight];
+                // Horizontal pass: srcU -> scratchChroma
+                for (int row = 0; row < chromaHeight; row++) {
+                    int srcOffset = row * srcStrideU;
+                    int dstOffset = row * chromaWidth;
+                    for (int col = 0; col < chromaWidth; col++) {
+                        int sum = 0;
+                        int count = 0;
+                        for (int k = -1; k <= 1; k++) {
+                            int c = col + k;
+                            if (c >= 0 && c < chromaWidth) {
+                                sum += srcU.get(srcOffset + c) & 0xFF;
+                                count++;
+                            }
+                        }
+                        scratchChroma[dstOffset + col] = (byte) ((sum + count / 2) / count);
+                    }
+                }
+                // Vertical pass: scratchChroma -> dstU (with optional LUT)
+                for (int row = 0; row < chromaHeight; row++) {
+                    int dstOffset = row * dstStrideU;
+                    for (int col = 0; col < chromaWidth; col++) {
+                        int sum = 0;
+                        int count = 0;
+                        for (int k = -1; k <= 1; k++) {
+                            int r = row + k;
+                            if (r >= 0 && r < chromaHeight) {
+                                sum += scratchChroma[r * chromaWidth + col] & 0xFF;
+                                count++;
+                            }
+                        }
+                        int blurred = (sum + count / 2) / count;
+                        dstU.put(dstOffset + col, toneIsDefault ? (byte) blurred : localULUT[blurred]);
+                    }
+                }
+            } else if (!toneIsDefault) {
                 for (int row = 0; row < chromaHeight; row++) {
                     int srcOffset = row * srcStrideU;
                     int dstOffset = row * dstStrideU;
@@ -413,7 +482,43 @@ public class ImageAdjustmentProcessor implements VideoFrameProcessor {
 
             // --- V plane ---
             dstV.position(0);
-            if (!toneIsDefault) {
+            if (smoothingActive && smoothChroma && smoothedAvail) {
+                byte[] scratchChroma = new byte[chromaWidth * chromaHeight];
+                // Horizontal pass: srcV -> scratchChroma
+                for (int row = 0; row < chromaHeight; row++) {
+                    int srcOffset = row * srcStrideV;
+                    int dstOffset = row * chromaWidth;
+                    for (int col = 0; col < chromaWidth; col++) {
+                        int sum = 0;
+                        int count = 0;
+                        for (int k = -1; k <= 1; k++) {
+                            int c = col + k;
+                            if (c >= 0 && c < chromaWidth) {
+                                sum += srcV.get(srcOffset + c) & 0xFF;
+                                count++;
+                            }
+                        }
+                        scratchChroma[dstOffset + col] = (byte) ((sum + count / 2) / count);
+                    }
+                }
+                // Vertical pass: scratchChroma -> dstV (with optional LUT)
+                for (int row = 0; row < chromaHeight; row++) {
+                    int dstOffset = row * dstStrideV;
+                    for (int col = 0; col < chromaWidth; col++) {
+                        int sum = 0;
+                        int count = 0;
+                        for (int k = -1; k <= 1; k++) {
+                            int r = row + k;
+                            if (r >= 0 && r < chromaHeight) {
+                                sum += scratchChroma[r * chromaWidth + col] & 0xFF;
+                                count++;
+                            }
+                        }
+                        int blurred = (sum + count / 2) / count;
+                        dstV.put(dstOffset + col, toneIsDefault ? (byte) blurred : localVLUT[blurred]);
+                    }
+                }
+            } else if (!toneIsDefault) {
                 for (int row = 0; row < chromaHeight; row++) {
                     int srcOffset = row * srcStrideV;
                     int dstOffset = row * dstStrideV;

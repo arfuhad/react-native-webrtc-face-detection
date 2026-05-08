@@ -12,8 +12,12 @@
 
 // Bilateral skin smoothing on the Y plane (pre-LUT stage).
 @property (nonatomic, assign) BOOL    smoothingEnabled;
-@property (nonatomic, assign) CGFloat smoothingDistanceNormalization; // 2.5 to 8.0
+@property (nonatomic, assign) CGFloat smoothingDistanceNormalization; // 1.0 to 8.0
 @property (nonatomic, assign) CGFloat smoothingTexelSpacing;          // 1.0 to 4.0
+@property (nonatomic, assign) int     smoothingIterations;             // 1 to 8, default 4
+@property (nonatomic, assign) CGFloat smoothingMix;                    // 0.0 to 1.0, default 0.0
+@property (nonatomic, assign) CGFloat smoothingSkinBrightness;         // 0.0 to 1.0, default 0.0
+@property (nonatomic, assign) BOOL    smoothingSmoothChroma;           // default YES
 
 // Skin-mask gating for bilateral smoothing. When skinMaskEnabled is YES the
 // smoother only runs inside the face bounding box; outside pixels are left

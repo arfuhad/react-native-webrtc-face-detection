@@ -40,8 +40,12 @@
         _saturation = 1.0;
         _colorTemperature = 0.0;
         _smoothingEnabled = NO;
-        _smoothingDistanceNormalization = 8.0;
-        _smoothingTexelSpacing = 1.0;
+        _smoothingDistanceNormalization = 3.0;
+        _smoothingTexelSpacing = 2.0;
+        _smoothingIterations = 4;
+        _smoothingMix = 0.0;
+        _smoothingSkinBrightness = 0.0;
+        _smoothingSmoothChroma = YES;
         _skinMaskEnabled = YES;
         _skinMaskFeatherPx = 0;       // 0 = auto (face-height based)
         _skinMaskEyeProtect = YES;
@@ -92,6 +96,18 @@
             if (smoothing[@"texelSpacing"]) {
                 _smoothingTexelSpacing = [smoothing[@"texelSpacing"] floatValue];
             }
+            if (smoothing[@"iterations"]) {
+                _smoothingIterations = [smoothing[@"iterations"] intValue];
+            }
+            if (smoothing[@"mix"]) {
+                _smoothingMix = [smoothing[@"mix"] floatValue];
+            }
+            if (smoothing[@"skinBrightness"]) {
+                _smoothingSkinBrightness = [smoothing[@"skinBrightness"] floatValue];
+            }
+            if (smoothing[@"smoothChroma"]) {
+                _smoothingSmoothChroma = [smoothing[@"smoothChroma"] boolValue];
+            }
 
             // smoothing.skinMask sub-dict. Each field is independently optional
             // so callers can toggle one without clobbering others.
@@ -125,8 +141,12 @@
         _saturation = 1.0;
         _colorTemperature = 0.0;
         _smoothingEnabled = NO;
-        _smoothingDistanceNormalization = 8.0;
-        _smoothingTexelSpacing = 1.0;
+        _smoothingDistanceNormalization = 3.0;
+        _smoothingTexelSpacing = 2.0;
+        _smoothingIterations = 4;
+        _smoothingMix = 0.0;
+        _smoothingSkinBrightness = 0.0;
+        _smoothingSmoothChroma = YES;
         _skinMaskEnabled = YES;
         _skinMaskFeatherPx = 0;
         _skinMaskEyeProtect = YES;
@@ -142,7 +162,10 @@
 - (void)syncSmootherConfig {
     [_smoother updateConfig:_smoothingEnabled
                distanceNorm:(float)_smoothingDistanceNormalization
-               texelSpacing:(float)_smoothingTexelSpacing];
+               texelSpacing:(float)_smoothingTexelSpacing
+                 iterations:_smoothingIterations
+                        mix:_smoothingMix
+             skinBrightness:_smoothingSkinBrightness];
 }
 
 - (void)rebuildLUTs {
@@ -218,19 +241,26 @@
     uint8_t localVLUT[256];
     BOOL    toneIsDefault;
     BOOL    smoothingActive;
+    BOOL    smoothChroma;
     BOOL    skinMaskEnabled;
     int     skinMaskFeatherPx;
     BOOL    skinMaskEyeProtect;
     BOOL    skinMaskMouthProtect;
+    float   smoothingMix;
+    float   smoothingSkinBrightness;
 
     @synchronized (self) {
         toneIsDefault        = _toneIsDefault;
         smoothingActive      = _smoothingEnabled;
+        smoothChroma         = _smoothingSmoothChroma;
         skinMaskEnabled      = _skinMaskEnabled;
         skinMaskFeatherPx    = _skinMaskFeatherPx;
         skinMaskEyeProtect   = _skinMaskEyeProtect;
         skinMaskMouthProtect = _skinMaskMouthProtect;
-        if (!toneIsDefault) {
+        smoothingMix         = (float)_smoothingMix;
+        smoothingSkinBrightness = (float)_smoothingSkinBrightness;
+    }
+
             memcpy(localYLUT, _yLUT, 256);
             memcpy(localULUT, _uLUT, 256);
             memcpy(localVLUT, _vLUT, 256);
@@ -391,17 +421,33 @@
                     memcpy(smRow + bx1, srcRow + bx1, (size_t)(width - bx1));
                 }
                 // Inside the slab: blend src and smoothed by mask.
+                uint32_t mix8 = (uint32_t)(smoothingMix * 255.0f + 0.5f);
+                int brightnessGain = (int)(smoothingSkinBrightness * 40.0f); // Max ~40 units brighter
+
                 for (int x = bx0; x < bx1; x++) {
                     uint32_t m = maskRow[x];
                     if (m == 0) {
                         smRow[x] = srcRow[x];
-                    } else if (m == 255) {
-                        // smRow[x] already holds the smoothed value.
                     } else {
                         uint32_t s = smRow[x];
                         uint32_t o = srcRow[x];
-                        // (m * s + (255 - m) * o + 127) / 255 — rounded blend.
-                        smRow[x] = (uint8_t)((m * s + (255 - m) * o + 127) / 255);
+
+                        // Texture preservation (mix)
+                        if (mix8 > 0) {
+                            s = (mix8 * o + (255 - mix8) * s + 127) / 255;
+                        }
+
+                        // Skin brightening (targeted glow)
+                        if (brightnessGain > 0) {
+                            s = (uint32_t)MAX(0, MIN(255, (int)s + brightnessGain));
+                        }
+
+                        if (m == 255) {
+                            smRow[x] = (uint8_t)s;
+                        } else {
+                            // (m * s + (255 - m) * o + 127) / 255 — rounded blend.
+                            smRow[x] = (uint8_t)((m * s + (255 - m) * o + 127) / 255);
+                        }
                     }
                 }
             }
@@ -433,7 +479,59 @@
     }
 
     // --- U plane ---
-    if (!toneIsDefault) {
+    // Chroma smoothing: separable 3x3 box blur on U/V to reduce skin discoloration.
+    // Runs before LUT so the tone mapping operates on smoothed chroma.
+    if (smoothingActive && smoothChroma && smoothingProducedOutput) {
+        // Allocate chroma scratch if needed.
+        size_t chromaPixels = (size_t)chromaWidth * (size_t)chromaHeight;
+        uint8_t *scratchChroma = (uint8_t *)malloc(chromaPixels);
+        if (scratchChroma) {
+            // Horizontal pass: srcU -> scratchChroma
+            for (int row = 0; row < chromaHeight; row++) {
+                const uint8_t *sRow = srcU + row * srcStrideU;
+                uint8_t *dRow = scratchChroma + row * chromaWidth;
+                for (int col = 0; col < chromaWidth; col++) {
+                    int sum = 0;
+                    int count = 0;
+                    for (int k = -1; k <= 1; k++) {
+                        int c = col + k;
+                        if (c >= 0 && c < chromaWidth) {
+                            sum += sRow[c];
+                            count++;
+                        }
+                    }
+                    dRow[col] = (uint8_t)((sum + count / 2) / count);
+                }
+            }
+            // Vertical pass: scratchChroma -> dstU (with optional LUT)
+            for (int row = 0; row < chromaHeight; row++) {
+                uint8_t *dRow = dstU + row * dstStrideU;
+                for (int col = 0; col < chromaWidth; col++) {
+                    int sum = 0;
+                    int count = 0;
+                    for (int k = -1; k <= 1; k++) {
+                        int r = row + k;
+                        if (r >= 0 && r < chromaHeight) {
+                            sum += scratchChroma[r * chromaWidth + col];
+                            count++;
+                        }
+                    }
+                    uint8_t blurred = (uint8_t)((sum + count / 2) / count);
+                    dRow[col] = toneIsDefault ? blurred : localULUT[blurred];
+                }
+            }
+            free(scratchChroma);
+        } else {
+            // Fallback: no smoothing, just LUT or copy
+            for (int row = 0; row < chromaHeight; row++) {
+                const uint8_t *srcRow = srcU + row * srcStrideU;
+                uint8_t *dstRow = dstU + row * dstStrideU;
+                for (int col = 0; col < chromaWidth; col++) {
+                    dstRow[col] = toneIsDefault ? srcRow[col] : localULUT[srcRow[col]];
+                }
+            }
+        }
+    } else if (!toneIsDefault) {
         for (int row = 0; row < chromaHeight; row++) {
             const uint8_t *srcRow = srcU + row * srcStrideU;
             uint8_t *dstRow = dstU + row * dstStrideU;
@@ -450,7 +548,55 @@
     }
 
     // --- V plane ---
-    if (!toneIsDefault) {
+    if (smoothingActive && smoothChroma && smoothingProducedOutput) {
+        size_t chromaPixels = (size_t)chromaWidth * (size_t)chromaHeight;
+        uint8_t *scratchChroma = (uint8_t *)malloc(chromaPixels);
+        if (scratchChroma) {
+            // Horizontal pass: srcV -> scratchChroma
+            for (int row = 0; row < chromaHeight; row++) {
+                const uint8_t *sRow = srcV + row * srcStrideV;
+                uint8_t *dRow = scratchChroma + row * chromaWidth;
+                for (int col = 0; col < chromaWidth; col++) {
+                    int sum = 0;
+                    int count = 0;
+                    for (int k = -1; k <= 1; k++) {
+                        int c = col + k;
+                        if (c >= 0 && c < chromaWidth) {
+                            sum += sRow[c];
+                            count++;
+                        }
+                    }
+                    dRow[col] = (uint8_t)((sum + count / 2) / count);
+                }
+            }
+            // Vertical pass: scratchChroma -> dstV (with optional LUT)
+            for (int row = 0; row < chromaHeight; row++) {
+                uint8_t *dRow = dstV + row * dstStrideV;
+                for (int col = 0; col < chromaWidth; col++) {
+                    int sum = 0;
+                    int count = 0;
+                    for (int k = -1; k <= 1; k++) {
+                        int r = row + k;
+                        if (r >= 0 && r < chromaHeight) {
+                            sum += scratchChroma[r * chromaWidth + col];
+                            count++;
+                        }
+                    }
+                    uint8_t blurred = (uint8_t)((sum + count / 2) / count);
+                    dRow[col] = toneIsDefault ? blurred : localVLUT[blurred];
+                }
+            }
+            free(scratchChroma);
+        } else {
+            for (int row = 0; row < chromaHeight; row++) {
+                const uint8_t *srcRow = srcV + row * srcStrideV;
+                uint8_t *dstRow = dstV + row * dstStrideV;
+                for (int col = 0; col < chromaWidth; col++) {
+                    dstRow[col] = toneIsDefault ? srcRow[col] : localVLUT[srcRow[col]];
+                }
+            }
+        }
+    } else if (!toneIsDefault) {
         for (int row = 0; row < chromaHeight; row++) {
             const uint8_t *srcRow = srcV + row * srcStrideV;
             uint8_t *dstRow = dstV + row * dstStrideV;

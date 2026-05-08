@@ -81,8 +81,11 @@ public class BilateralSmoother {
 
     // Config
     private volatile boolean enabled = false;
-    private volatile float distanceNorm = 8.0f;
-    private volatile float texelSpacing = 1.0f;
+    private volatile float distanceNorm = 3.0f;
+    private volatile float texelSpacing = 2.0f;
+    private volatile int iterations = 4;
+    private volatile float mix = 0.0f;
+    private volatile float skinBrightness = 0.0f;
 
     // GL state — only touched on the processor thread
     private EglBase eglBase;
@@ -121,10 +124,14 @@ public class BilateralSmoother {
     // Reused upload buffer used when the source ByteBuffer has stride != width
     private ByteBuffer packedUploadBuffer;
 
-    public void updateConfig(boolean enabled, float distanceNorm, float texelSpacing) {
+    public void updateConfig(boolean enabled, float distanceNorm, float texelSpacing, int iterations,
+                             float mix, float skinBrightness) {
         this.enabled = enabled;
         this.distanceNorm = distanceNorm;
         this.texelSpacing = texelSpacing;
+        this.iterations = (iterations < 1) ? 1 : (iterations > 8) ? 8 : iterations;
+        this.mix = mix;
+        this.skinBrightness = skinBrightness;
     }
 
     public boolean isEnabled() {
@@ -159,9 +166,22 @@ public class BilateralSmoother {
             eglBase.makeCurrent();
 
             uploadYPlane(srcY, srcStride, width, height);
-            runPass(srcTexture, fboA, 1.0f, 0.0f, width, height);
-            runPass(passATexture, fboB, 0.0f, 1.0f, width, height);
-            readY(dstY, width, height);
+
+            int iters = (iterations < 1) ? 1 : (iterations > 8) ? 8 : iterations;
+
+            // Each iteration runs two passes: horizontal then vertical.
+            // Pass 1 (H): srcTexture -> fboA (passATexture)
+            // Pass 2 (V): passATexture -> fboB (passBTexture)
+            // After each full iteration, the result is always in fboB.
+            int currentInput = srcTexture;
+            for (int iter = 0; iter < iters; iter++) {
+                runPass(currentInput, fboA, 1.0f, 0.0f, width, height);  // H: input -> fboA
+                runPass(passATexture, fboB, 0.0f, 1.0f, width, height);  // V: fboA -> fboB
+                currentInput = passBTexture;  // next iteration reads from fboB
+            }
+
+            // After N iterations, result is always in fboB (passBTexture).
+            readY(dstY, width, height, fboB);
 
             return true;
         } catch (RuntimeException e) {
@@ -424,8 +444,8 @@ public class BilateralSmoother {
         GLES20.glDisableVertexAttribArray(aTexCoord);
     }
 
-    private void readY(ByteBuffer dstY, int width, int height) {
-        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, fboB);
+    private void readY(ByteBuffer dstY, int width, int height, int sourceFbo) {
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, sourceFbo);
         readbackBuffer.position(0);
         GLES20.glReadPixels(0, 0, width, height,
                             readbackFormat, GLES20.GL_UNSIGNED_BYTE, readbackBuffer);

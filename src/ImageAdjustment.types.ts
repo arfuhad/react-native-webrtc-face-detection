@@ -42,16 +42,49 @@ export interface ImageAdjustmentSmoothingConfig {
      * Range-similarity divisor. Larger values widen the tolerance for
      * luminance difference, producing stronger smoothing with less edge
      * preservation. Smaller values preserve more edges.
-     * Range: 2.5 to 8.0.
+     * Range: 1.0 to 8.0. Default: 3.0.
      */
     distanceNormalization: number;
 
     /**
      * Spatial sampling step in texels. Effectively widens the blur kernel
      * without increasing tap count. Larger values produce a softer look.
-     * Range: 1.0 to 4.0.
+     * Range: 1.0 to 4.0. Default: 2.0.
      */
     texelSpacing: number;
+
+    /**
+     * Number of full bilateral passes (horizontal + vertical each).
+     * More iterations compound the smoothing effect while preserving
+     * edges at each step. This is the primary control for smoothing strength.
+     * Range: 1 to 8. Default: 4.
+     *
+     * Performance: each iteration adds ~1ms at 720p, ~3ms at 1080p.
+     * Use 2-3 on low-end devices or 1080p video; 4-6 for strong smoothing.
+     */
+    iterations?: number;
+
+    /**
+     * Texture preservation (Mix). Blends a percentage of the original
+     * luminance back into the smoothed result to maintain natural skin
+     * texture and prevent a "plastic" look.
+     * Range: 0.0 (full smooth) to 1.0 (no smooth). Default: 0.0.
+     */
+    mix?: number;
+
+    /**
+     * Targeted skin brightening. Applies a brightness gain specifically
+     * to pixels within the skin mask. Creates a "glow" effect.
+     * Range: 0.0 to 1.0. Default: 0.0.
+     */
+    skinBrightness?: number;
+
+    /**
+     * Apply mild chroma (U/V plane) smoothing to reduce skin discoloration.
+     * Uses a CPU-based 3x3 box blur on the half-resolution chroma planes.
+     * Very cheap (~0.05ms at 720p). Default: true.
+     */
+    smoothChroma?: boolean;
 
     /**
      * Skin mask configuration. Requires `faceDetection` to be enabled on the same track,
