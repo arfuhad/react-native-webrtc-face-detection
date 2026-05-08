@@ -510,6 +510,15 @@ interface ImageAdjustmentConfig {
   contrast?: number;         // 0.0 to 3.0 (default: 1.0)
   saturation?: number;       // 0.0 to 3.0 (default: 1.0)
   colorTemperature?: number; // -1.0 to 1.0 (default: 0.0)
+  smoothing?: {
+    enabled: boolean;
+    distanceNormalization?: number; // 2.5–8.0 (default: 3.0)
+    texelSpacing?: number;          // 1.0–4.0 (default: 2.0)
+    iterations?: number;            // 1–8 (default: 3)
+    mix?: number;                   // 0.0-1.0 (default: 0.0)
+    skinBrightness?: number;        // 0.0-1.0 (default: 0.0)
+    smoothChroma?: boolean;         // default: true
+  }
 }
 
 // Face detection options (passed to hooks)
@@ -686,6 +695,8 @@ This project is a fork of [react-native-webrtc](https://github.com/react-native-
 - `FaceDetectionOverlay` component with fully customizable appearance
 - Face detection processor architecture for Android and iOS
 - Real-time image adjustment (exposure, contrast, saturation, color temperature)
+- **Advanced Bilateral Skin Smoothing** (Beauty filter) with texture preservation
+- **Targeted Skin Brightening** for a radiant "glow" effect
 - `useImageAdjustment` hook for standalone camera control
 - LUT-based I420 video frame processing with zero overhead at defaults
 
@@ -709,3 +720,11 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 - **Issues**: [GitHub Issues](https://github.com/arfuhad/react-native-webrtc/issues)
 - **Original WebRTC Community**: [Discourse Forum](https://react-native-webrtc.discourse.group/)
+t push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## 📬 Support
+
+- **Issues**: [GitHub Issues](https://github.com/arfuhad/react-native-webrtc/issues)
+- **Original WebRTC Community**: [Discourse Forum](https://react-native-webrtc.discourse.group/)
+/react-native-webrtc.discourse.group/)

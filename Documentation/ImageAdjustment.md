@@ -149,9 +149,9 @@ const BEAUTY_PRESETS = {
 |-----------|---------|-----------------|-------------------|
 | 1 | Barely visible | ~1 | ~3 |
 | 2 | Subtle | ~2 | ~6 |
-| 3 | Medium | ~3 | ~9 |
-| **4 (default)** | **Noticeable** | **~4** | **~12** |
-| 6 | Strong | ~6 | ~18 |
+| **3 (default)** | **Noticeable** | **~3** | **~9** |
+| 4 | Strong | ~4 | ~12 |
+| 6 | Flawless | ~6 | ~18 |
 | 8 | Maximum | ~8 | ~24 |
 
 At 30fps the frame budget is ~33ms. Reduce iterations or resolution on lower-end devices.
@@ -521,6 +521,15 @@ await track.applyConstraints({ width: 1920, height: 1080 });
 The processor clamps all values to valid pixel ranges (0-255), so out-of-range config values won't crash but may produce unexpected results. Stick to the documented ranges:
 - `exposure`: -1.0 to 1.0
 - `contrast`: 0.0 to 3.0
+- `saturation`: 0.0 to 3.0
+- `colorTemperature`: -1.0 to 1.0
+
+## Additional Resources
+
+- [Face Detection Guide](./FaceDetection.md)
+- [Basic Usage Guide](./BasicUsage.md)
+- [Example App](../examples/ExpoTestApp/)
+contrast`: 0.0 to 3.0
 - `saturation`: 0.0 to 3.0
 - `colorTemperature`: -1.0 to 1.0
 
