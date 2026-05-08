@@ -164,6 +164,7 @@ public class BilateralSmoother {
 
         try {
             eglBase.makeCurrent();
+            GlStateRestore state = new GlStateRestore();
 
             uploadYPlane(srcY, srcStride, width, height);
 
@@ -183,6 +184,7 @@ public class BilateralSmoother {
             // After N iterations, result is always in fboB (passBTexture).
             readY(dstY, width, height, fboB);
 
+            state.restore();
             return true;
         } catch (RuntimeException e) {
             Log.e(TAG, "smoothYPlane failed: " + e.getMessage(), e);
@@ -512,5 +514,34 @@ public class BilateralSmoother {
             return 0;
         }
         return shader;
+    }
+
+    /**
+     * Helper to snapshot and restore global GL state.
+     * Prevents side-effects in the shared WebRTC GL context.
+     */
+    private static class GlStateRestore {
+        private final int[] viewport = new int[4];
+        private final int[] activeTex = new int[1];
+        private final int[] boundTex = new int[1];
+        private final int[] framebuffer = new int[1];
+        private final int[] program = new int[1];
+        private final int[] vertexAttribArrayEnabled = new int[2]; // aPosition, aTexCoord
+
+        public GlStateRestore() {
+            GLES20.glGetIntegerv(GLES20.GL_VIEWPORT, viewport, 0);
+            GLES20.glGetIntegerv(GLES20.GL_ACTIVE_TEXTURE, activeTex, 0);
+            GLES20.glGetIntegerv(GLES20.GL_TEXTURE_BINDING_2D, boundTex, 0);
+            GLES20.glGetIntegerv(GLES20.GL_FRAMEBUFFER_BINDING, framebuffer, 0);
+            GLES20.glGetIntegerv(GLES20.GL_CURRENT_PROGRAM, program, 0);
+        }
+
+        public void restore() {
+            GLES20.glUseProgram(program[0]);
+            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, framebuffer[0]);
+            GLES20.glActiveTexture(activeTex[0]);
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, boundTex[0]);
+            GLES20.glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
+        }
     }
 }
