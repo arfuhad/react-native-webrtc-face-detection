@@ -259,8 +259,8 @@
         skinMaskMouthProtect = _skinMaskMouthProtect;
         smoothingMix         = (float)_smoothingMix;
         smoothingSkinBrightness = (float)_smoothingSkinBrightness;
-    }
 
+        if (!toneIsDefault) {
             memcpy(localYLUT, _yLUT, 256);
             memcpy(localULUT, _uLUT, 256);
             memcpy(localVLUT, _vLUT, 256);
