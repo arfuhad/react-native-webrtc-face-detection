@@ -110,12 +110,6 @@ public class FaceDetectionProcessor implements VideoFrameProcessor {
         float minProbDuringClosure = 1.0f;       // Lowest prob while closed
     }
 
-    // #region agent log helper
-    private void debugLog(String hypothesisId, String message, String data) {
-        Log.d("DEBUG_AGENT", "[" + hypothesisId + "] FDP:" + message + " " + data);
-    }
-    // #endregion
-
     public FaceDetectionProcessor(ReactApplicationContext context) {
         this.reactContext = context;
         initializeFaceDetector();
@@ -276,15 +270,8 @@ public class FaceDetectionProcessor implements VideoFrameProcessor {
 
     @Override
     public VideoFrame process(VideoFrame frame, SurfaceTextureHelper textureHelper) {
-        // #region agent log
-        debugLog("C", "process_entry", "{\"isEnabled\":" + isEnabled + ",\"pipelineInitialized\":" + pipelineInitialized + "}");
-        // #endregion
-        
         // Always return the frame immediately - never block the video pipeline
         if (!isEnabled || !pipelineInitialized) {
-            // #region agent log
-            debugLog("C", "process_skip_disabled", "{}");
-            // #endregion
             return frame;
         }
 
@@ -292,18 +279,12 @@ public class FaceDetectionProcessor implements VideoFrameProcessor {
         
         // Skip frames for performance
         if (frameCounter % frameSkipCount != 0) {
-            // #region agent log
-            debugLog("E", "process_skip_counter", "{\"frameCounter\":" + frameCounter + ",\"frameSkipCount\":" + frameSkipCount + "}");
-            // #endregion
             return frame;
         }
 
         // Only process if not already processing a frame
         // This prevents queue buildup and ensures we don't overwhelm the detection thread
         if (!isProcessing.compareAndSet(false, true)) {
-            // #region agent log
-            debugLog("E", "process_skip_busy", "{}");
-            // #endregion
             return frame;
         }
 
@@ -313,19 +294,11 @@ public class FaceDetectionProcessor implements VideoFrameProcessor {
             final int frameWidth = frame.getRotatedWidth();
             final int frameHeight = frame.getRotatedHeight();
             
-            // #region agent log
-            String bufferType = buffer.getClass().getSimpleName();
-            debugLog("A", "process_buffer_type", "{\"bufferType\":\"" + bufferType + "\"}");
-            // #endregion
-
             if (buffer instanceof VideoFrame.I420Buffer) {
                 // Already I420 - process directly (fast path)
                 processI420Buffer((VideoFrame.I420Buffer) buffer, rotation, frameWidth, frameHeight);
             } else {
                 // TextureBuffer - need to convert on dedicated thread
-                // #region agent log
-                debugLog("A", "calling_processTextureBuffer", "{}");
-                // #endregion
                 processTextureBuffer(frame, textureHelper, rotation, frameWidth, frameHeight);
             }
         } catch (Exception e) {
@@ -333,9 +306,6 @@ public class FaceDetectionProcessor implements VideoFrameProcessor {
             isProcessing.set(false);
         }
 
-        // #region agent log
-        debugLog("D", "process_returning_frame", "{}");
-        // #endregion
         return frame;
     }
 
@@ -364,10 +334,6 @@ public class FaceDetectionProcessor implements VideoFrameProcessor {
      */
     private void processTextureBuffer(VideoFrame frame, SurfaceTextureHelper textureHelper,
                                        int rotation, int frameWidth, int frameHeight) {
-        // #region agent log
-        debugLog("A", "processTextureBuffer_entry", "{}");
-        // #endregion
-        
         VideoFrame.I420Buffer i420Buffer = null;
         try {
             // IMPORTANT: Retain the frame before conversion to prevent it from being
@@ -378,15 +344,7 @@ public class FaceDetectionProcessor implements VideoFrameProcessor {
             // This creates a new buffer with copied data that we own
             VideoFrame.Buffer buffer = frame.getBuffer();
             
-            // #region agent log
-            debugLog("A", "before_toI420", "{}");
-            // #endregion
-            
             i420Buffer = buffer.toI420();
-            
-            // #region agent log
-            debugLog("A", "after_toI420", "{\"i420BufferNull\":" + (i420Buffer == null) + "}");
-            // #endregion
             
             // Release our retain on the frame - we're done accessing the texture
             frame.release();
@@ -399,10 +357,6 @@ public class FaceDetectionProcessor implements VideoFrameProcessor {
                 // Release the I420 buffer now - we've copied all the data we need
                 i420Buffer.release();
                 i420Buffer = null;
-                
-                // #region agent log
-                debugLog("A", "i420Buffer_released", "{}");
-                // #endregion
                 
                 if (image != null && faceDetectionHandler != null) {
                     // Now we can safely process async - the InputImage has its own data copy
@@ -418,9 +372,6 @@ public class FaceDetectionProcessor implements VideoFrameProcessor {
             }
         } catch (Exception e) {
             Log.e(TAG, "Error converting texture to I420: " + e.getMessage());
-            // #region agent log
-            debugLog("A", "processTextureBuffer_error", "{\"error\":\"" + e.getMessage() + "\"}");
-            // #endregion
             isProcessing.set(false);
             // Release the I420 buffer if we created one
             if (i420Buffer != null) {
@@ -432,9 +383,6 @@ public class FaceDetectionProcessor implements VideoFrameProcessor {
             } catch (Exception ignored) {}
         }
         
-        // #region agent log
-        debugLog("D", "processTextureBuffer_exit", "{}");
-        // #endregion
     }
 
     /**

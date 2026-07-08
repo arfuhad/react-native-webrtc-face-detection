@@ -14,6 +14,12 @@ const eventEmitter = new NativeEventEmitter(WebRTCModule);
  * @param config Optional configuration for face detection
  * @returns Object with detection results and control functions
  *
+ * @remarks
+ * `config` is a dependency of the returned `enable` callback. Pass a stable
+ * reference (module constant or `useMemo`) rather than an inline object literal,
+ * otherwise `enable`'s identity changes every render and can cause repeated
+ * enable/disable churn if you place it in an effect's dependency array.
+ *
  * @example
  * ```tsx
  * const videoTrack = stream.getVideoTracks()[0];

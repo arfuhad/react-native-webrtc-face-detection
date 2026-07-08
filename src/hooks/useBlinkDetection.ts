@@ -15,6 +15,13 @@ const eventEmitter = new NativeEventEmitter(WebRTCModule);
  * @param onBlink Optional callback invoked for each blink event (includes faceImage if captureOnBlink enabled)
  * @returns Object with blink tracking data and control functions
  *
+ * @remarks
+ * Pass a stable `config` reference (module constant or `useMemo`) rather than an
+ * inline object literal — it is a dependency of the `enable` callback, so a new
+ * object each render changes `enable`'s identity and can cause enable/disable
+ * churn if used in an effect dependency array. `onBlink` is safe to pass inline
+ * (it is captured via a ref).
+ *
  * @example
  * ```tsx
  * const videoTrack = stream.getVideoTracks()[0];

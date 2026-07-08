@@ -6,10 +6,10 @@ Pod::Spec.new do |s|
   s.name                = package['name']
   s.version             = package['version']
   s.summary             = package['description']
-  s.homepage            = 'https://github.com/arfuhad/react-native-webrtc'
+  s.homepage            = 'https://github.com/arfuhad/react-native-webrtc-face-detection'
   s.license             = package['license']
   s.author              = 'arfuhad'
-  s.source              = { :git => 'git@github.com:arfuhad/react-native-webrtc.git', :tag => 'release #{s.version}' }
+  s.source              = { :git => 'git@github.com:arfuhad/react-native-webrtc-face-detection.git', :tag => 'release #{s.version}' }
   s.requires_arc        = true
 
   s.platforms           = { :ios => '15.5', :osx => '10.13', :tvos => '16.0' }

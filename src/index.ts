@@ -1,7 +1,7 @@
 import { NativeModules, Platform } from 'react-native';
 const { WebRTCModule } = NativeModules;
 
-if (WebRTCModule === null) {
+if (!WebRTCModule) {
     throw new Error(`WebRTC native module not found.\n${Platform.OS === 'ios' ?
         'Try executing the "pod install" command inside your projects ios folder.' :
         'Try executing the "npm install" command inside your projects folder.'
@@ -121,13 +121,11 @@ function registerGlobals(): void {
     global.RTCIceCandidate = RTCIceCandidate;
     global.RTCPeerConnection = RTCPeerConnection;
     global.RTCRtpReceiver = RTCRtpReceiver;
-    global.RTCRtpSender = RTCRtpReceiver;
+    global.RTCRtpSender = RTCRtpSender;
     global.RTCSessionDescription = RTCSessionDescription;
     global.MediaStream = MediaStream;
     global.MediaStreamTrack = MediaStreamTrack;
     global.MediaStreamTrackEvent = MediaStreamTrackEvent;
     global.RTCRtpTransceiver = RTCRtpTransceiver;
-    global.RTCRtpReceiver = RTCRtpReceiver;
-    global.RTCRtpSender = RTCRtpSender;
     global.RTCErrorEvent = RTCErrorEvent;
 }

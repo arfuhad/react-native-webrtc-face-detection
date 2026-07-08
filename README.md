@@ -700,6 +700,30 @@ This project is a fork of [react-native-webrtc](https://github.com/react-native-
 - `useImageAdjustment` hook for standalone camera control
 - LUT-based I420 video frame processing with zero overhead at defaults
 
+## 🔒 Privacy & Biometric Data
+
+This library processes **biometric data** (faces, eye state) and can capture and export
+face imagery. Detection runs **fully on-device** via Google ML Kit — no frames or landmarks
+are sent to any network by this library — but you remain responsible for how you handle the
+results:
+
+- **Consent**: Obtain explicit user consent before enabling face detection or `captureOnBlink`.
+  Biometric processing is regulated under laws such as **GDPR** (special-category data),
+  **BIPA** (Illinois), and **CCPA/CPRA**.
+- **`captureOnBlink` output**: `BlinkEvent.faceImage` is a base64 JPEG of the user's face.
+  Do not log it, and transmit/store it only over secure channels with a clear retention policy.
+- **ML Kit Terms**: Use of ML Kit is subject to the
+  [Google ML Kit Terms of Service](https://developers.google.com/ml-kit/terms).
+- **Minimize**: Keep `enableFaceDetection` opt-in (it is off by default) and disable detection
+  when it is not needed.
+
+## 🏷️ Versioning
+
+This package's major version tracks the underlying **WebRTC** build (e.g. `124.x` ships on
+JitsiWebRTC / `org.jitsi:webrtc` 124). The **minor/patch** components track this library's own
+feature and fix releases. As a result the version does **not** follow strict SemVer against the
+face-detection API surface — review the release notes when upgrading a minor version.
+
 ## 📄 License
 
 MIT License - see the [LICENSE](./LICENSE) file for details.
@@ -718,13 +742,5 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## 📬 Support
 
-- **Issues**: [GitHub Issues](https://github.com/arfuhad/react-native-webrtc/issues)
+- **Issues**: [GitHub Issues](https://github.com/arfuhad/react-native-webrtc-face-detection/issues)
 - **Original WebRTC Community**: [Discourse Forum](https://react-native-webrtc.discourse.group/)
-t push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📬 Support
-
-- **Issues**: [GitHub Issues](https://github.com/arfuhad/react-native-webrtc/issues)
-- **Original WebRTC Community**: [Discourse Forum](https://react-native-webrtc.discourse.group/)
-/react-native-webrtc.discourse.group/)
